@@ -6,8 +6,9 @@ import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QComboBox,
+    QCheckBox,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from oss_cam_scanner.core.detection import detect_document
-from oss_cam_scanner.core.filters import ScanFilter, apply_filter
+from oss_cam_scanner.core.filters import ScanFilter, apply_filters
 from oss_cam_scanner.core.geometry import order_points, warp_perspective
 from oss_cam_scanner.core.io import image_to_pixmap, read_image_rgb, write_image
 from oss_cam_scanner.models import ImageItem, ItemStatus, PointArray
@@ -36,7 +37,8 @@ class ScannerWindow(QMainWindow):
         self.setWindowTitle("OSS Cam Scanner")
         self._items: list[ImageItem] = []
         self._current_index = -1
-        self._current_filter = ScanFilter.ORIGINAL
+        self._selected_filters: set[ScanFilter] = set()
+        self._filter_checkboxes: dict[ScanFilter, QCheckBox] = {}
         self._preview_image: np.ndarray | None = None
 
         self._list = QListWidget()
@@ -119,11 +121,22 @@ class ScannerWindow(QMainWindow):
         self._preview_label.setStyleSheet("background: #1f2328;")
         layout.addWidget(self._preview_label, 1)
 
-        controls = QHBoxLayout()
-        self._filter_combo = QComboBox()
-        for scan_filter in ScanFilter:
-            self._filter_combo.addItem(scan_filter.value, scan_filter)
-        self._filter_combo.currentIndexChanged.connect(self._filter_changed)
+        filter_group = QGroupBox("Filters")
+        filter_group.setStyleSheet("QGroupBox { font-weight: 600; }")
+        filter_panel = QHBoxLayout(filter_group)
+        for scan_filter, label in (
+            (ScanFilter.NO_SHADOW, "No shadow"),
+            (ScanFilter.LIGHTEN, "Lighten"),
+            (ScanFilter.ENHANCE, "Enhance"),
+        ):
+            checkbox = QCheckBox(label)
+            checkbox.setStyleSheet("QCheckBox { font-size: 15px; padding: 6px 10px; }")
+            checkbox.stateChanged.connect(self._filters_changed)
+            self._filter_checkboxes[scan_filter] = checkbox
+            filter_panel.addWidget(checkbox)
+        filter_panel.addStretch()
+
+        actions = QHBoxLayout()
         back_button = QPushButton("Back")
         back_button.clicked.connect(self._show_adjustment)
         save_button = QPushButton("Save")
@@ -131,13 +144,12 @@ class ScannerWindow(QMainWindow):
         save_next_button = QPushButton("Save And Next")
         save_next_button.clicked.connect(self._save_and_next)
 
-        controls.addWidget(QLabel("Filter"))
-        controls.addWidget(self._filter_combo)
-        controls.addStretch()
-        controls.addWidget(back_button)
-        controls.addWidget(save_button)
-        controls.addWidget(save_next_button)
-        layout.addLayout(controls)
+        actions.addStretch()
+        actions.addWidget(back_button)
+        actions.addWidget(save_button)
+        actions.addWidget(save_next_button)
+        layout.addWidget(filter_group)
+        layout.addLayout(actions)
         return page
 
     def add_images(self, paths: list[Path]) -> None:
@@ -182,8 +194,7 @@ class ScannerWindow(QMainWindow):
         item = self._items[index]
         self._canvas.set_image(item.original_rgb)
         self._canvas.set_polygon(item.corners)
-        self._current_filter = ScanFilter.ORIGINAL
-        self._filter_combo.setCurrentIndex(0)
+        self._sync_filter_checkboxes()
         self._preview_image = None
         self._stack.setCurrentWidget(self._adjust_page)
 
@@ -233,9 +244,12 @@ class ScannerWindow(QMainWindow):
         self._stack.setCurrentWidget(self._preview_page)
         self._apply_current_filter()
 
-    def _filter_changed(self, index: int) -> None:
-        scan_filter = self._filter_combo.itemData(index)
-        self._current_filter = scan_filter if isinstance(scan_filter, ScanFilter) else ScanFilter(str(scan_filter))
+    def _filters_changed(self, *_args: object) -> None:
+        self._selected_filters = {
+            scan_filter
+            for scan_filter, checkbox in self._filter_checkboxes.items()
+            if checkbox.isChecked()
+        }
         if self._stack.currentWidget() == self._preview_page:
             self._apply_current_filter()
 
@@ -246,7 +260,7 @@ class ScannerWindow(QMainWindow):
         try:
             if item.warped_rgb is None:
                 item.warped_rgb = warp_perspective(item.original_rgb, item.corners)
-            self._preview_image = apply_filter(item.warped_rgb, self._current_filter)
+            self._preview_image = apply_filters(item.warped_rgb, self._selected_filters)
         except Exception as exc:
             item.status = ItemStatus.FAILED
             item.error = str(exc)
@@ -317,3 +331,9 @@ class ScannerWindow(QMainWindow):
         item = self._items[index]
         list_item.setText(f"{item.display_name} [{item.status}]")
         list_item.setToolTip(str(item.path))
+
+    def _sync_filter_checkboxes(self) -> None:
+        for scan_filter, checkbox in self._filter_checkboxes.items():
+            checkbox.blockSignals(True)
+            checkbox.setChecked(scan_filter in self._selected_filters)
+            checkbox.blockSignals(False)

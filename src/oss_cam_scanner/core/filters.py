@@ -9,15 +9,27 @@ from oss_cam_scanner.models import ImageArray
 
 
 class ScanFilter(StrEnum):
-    ORIGINAL = "original"
     NO_SHADOW = "no shadow"
     LIGHTEN = "lighten"
     ENHANCE = "enhance"
 
 
+FILTER_ORDER: tuple[ScanFilter, ...] = (
+    ScanFilter.NO_SHADOW,
+    ScanFilter.LIGHTEN,
+    ScanFilter.ENHANCE,
+)
+
+
+def apply_filters(image_rgb: ImageArray, selected_filters: set[ScanFilter]) -> ImageArray:
+    result = image_rgb.copy()
+    for scan_filter in FILTER_ORDER:
+        if scan_filter in selected_filters:
+            result = apply_filter(result, scan_filter)
+    return result
+
+
 def apply_filter(image_rgb: ImageArray, scan_filter: ScanFilter) -> ImageArray:
-    if scan_filter == ScanFilter.ORIGINAL:
-        return image_rgb.copy()
     if scan_filter == ScanFilter.NO_SHADOW:
         return remove_shadow(image_rgb)
     if scan_filter == ScanFilter.LIGHTEN:
