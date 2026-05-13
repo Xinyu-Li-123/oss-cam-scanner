@@ -29,6 +29,22 @@ def write_image(path: Path, image_rgb: ImageArray) -> None:
         image.save(path)
 
 
+def write_pdf(path: Path, image_rgb: ImageArray) -> None:
+    if path.suffix.lower() != ".pdf":
+        path = path.with_suffix(".pdf")
+    pillow_from_rgb(image_rgb).save(path, "PDF", resolution=300.0)
+
+
+def write_combined_pdf(path: Path, images_rgb: list[ImageArray]) -> None:
+    if not images_rgb:
+        raise ValueError("Cannot export a PDF without saved pages.")
+    if path.suffix.lower() != ".pdf":
+        path = path.with_suffix(".pdf")
+    pages = [pillow_from_rgb(image) for image in images_rgb]
+    first, rest = pages[0], pages[1:]
+    first.save(path, "PDF", resolution=300.0, save_all=True, append_images=rest)
+
+
 def image_to_qimage(image_rgb: ImageArray) -> QImage:
     contiguous = np.ascontiguousarray(image_rgb)
     height, width, channels = contiguous.shape

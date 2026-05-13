@@ -14,7 +14,7 @@ PointArray = NDArray[np.float32]
 class ItemStatus(StrEnum):
     PENDING = "pending"
     PREVIEWED = "previewed"
-    SAVED = "saved"
+    SAVED = "saved for export"
     FAILED = "failed"
 
 
@@ -34,6 +34,7 @@ class ImageItem:
     corners: PointArray
     status: ItemStatus = ItemStatus.PENDING
     warped_rgb: ImageArray | None = None
+    saved_rgb: ImageArray | None = None
     error: str | None = None
 
     @property
