@@ -3,23 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QCheckBox,
     QFileDialog,
-    QGroupBox,
     QHBoxLayout,
-    QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QPushButton,
-    QSizePolicy,
     QStackedWidget,
     QToolBar,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -28,7 +21,6 @@ from oss_cam_scanner.core.filters import ScanFilter, apply_filters
 from oss_cam_scanner.core.geometry import order_points, warp_perspective
 from oss_cam_scanner.core.io import (
     PdfPageLayout,
-    image_to_pixmap,
     read_image_rgb,
     resolve_pdf_page_layout,
     write_combined_pdf,
@@ -36,8 +28,10 @@ from oss_cam_scanner.core.io import (
     write_pdf,
 )
 from oss_cam_scanner.models import ImageArray, ImageItem, ItemStatus, PointArray
-from oss_cam_scanner.widgets.document_canvas import DocumentCanvas
+from oss_cam_scanner.widgets.adjust_page import AdjustPage
+from oss_cam_scanner.widgets.empty_page import EmptyPage
 from oss_cam_scanner.widgets.export_page import ExportPage
+from oss_cam_scanner.widgets.preview_page import PreviewPage
 
 
 class ScannerWindow(QMainWindow):
@@ -47,7 +41,6 @@ class ScannerWindow(QMainWindow):
         self._items: list[ImageItem] = []
         self._current_index = -1
         self._selected_filters: set[ScanFilter] = set()
-        self._filter_checkboxes: dict[ScanFilter, QCheckBox] = {}
         self._preview_image: np.ndarray | None = None
 
         self._list = QListWidget()
@@ -95,87 +88,26 @@ class ScannerWindow(QMainWindow):
         export_action.triggered.connect(self._show_export_page)
         toolbar.addAction(export_action)
 
-    def _build_empty_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        label = QLabel("Open one or more images to start scanning.")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        open_button = QPushButton("Open Images")
-        open_button.clicked.connect(self._choose_images)
-        layout.addStretch()
-        layout.addWidget(label)
-        layout.addWidget(open_button, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addStretch()
+    def _build_empty_page(self) -> EmptyPage:
+        page = EmptyPage()
+        page.open_images_requested.connect(self._choose_images)
         return page
 
-    def _build_adjust_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        self._canvas = DocumentCanvas()
-        self._canvas.polygon_changed.connect(self._set_current_polygon)
-        layout.addWidget(self._canvas, 1)
-
-        controls = QHBoxLayout()
-        reset_button = QPushButton("Reset Corners")
-        reset_button.clicked.connect(self._reset_corners)
-        preview_button = QPushButton("Preview")
-        preview_button.clicked.connect(self._show_preview)
-        controls.addWidget(reset_button)
-        controls.addStretch()
-        controls.addWidget(preview_button)
-        layout.addLayout(controls)
+    def _build_adjust_page(self) -> AdjustPage:
+        page = AdjustPage()
+        page.polygon_changed.connect(self._set_current_polygon)
+        page.reset_requested.connect(self._reset_corners)
+        page.preview_requested.connect(self._show_preview)
         return page
 
-    def _build_preview_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        self._preview_label = QLabel()
-        self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._preview_label.setMinimumSize(480, 360)
-        self._preview_label.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self._preview_label.setStyleSheet("background: #1f2328;")
-        layout.addWidget(self._preview_label, 1)
-
-        filter_group = QGroupBox("Filters")
-        filter_group.setStyleSheet("QGroupBox { font-weight: 600; }")
-        filter_panel = QHBoxLayout(filter_group)
-        for scan_filter, label in (
-            (ScanFilter.NO_SHADOW, "No shadow"),
-            (ScanFilter.LIGHTEN, "Lighten"),
-            (ScanFilter.ENHANCE, "Enhance"),
-        ):
-            checkbox = QCheckBox(label)
-            checkbox.setStyleSheet("QCheckBox { font-size: 15px; padding: 6px 10px; }")
-            checkbox.stateChanged.connect(self._filters_changed)
-            self._filter_checkboxes[scan_filter] = checkbox
-            filter_panel.addWidget(checkbox)
-        rotate_left_button = QPushButton("Rotate Left")
-        rotate_left_button.clicked.connect(self._rotate_current_left)
-        rotate_right_button = QPushButton("Rotate Right")
-        rotate_right_button.clicked.connect(self._rotate_current_right)
-        filter_panel.addWidget(rotate_left_button)
-        filter_panel.addWidget(rotate_right_button)
-        filter_panel.addStretch()
-
-        actions = QHBoxLayout()
-        back_button = QPushButton("Back")
-        back_button.clicked.connect(self._show_adjustment)
-        self._save_button = QPushButton("Save")
-        self._save_button.clicked.connect(self._save_current)
-        self._save_next_button = QPushButton("Save And Next")
-        self._save_next_button.clicked.connect(self._save_and_next)
-        self._export_button = QPushButton("Save And Export")
-        self._export_button.clicked.connect(self._save_and_show_export)
-
-        actions.addStretch()
-        actions.addWidget(back_button)
-        actions.addWidget(self._save_button)
-        actions.addWidget(self._save_next_button)
-        actions.addWidget(self._export_button)
-        layout.addWidget(filter_group)
-        layout.addLayout(actions)
+    def _build_preview_page(self) -> PreviewPage:
+        page = PreviewPage()
+        page.back_requested.connect(self._show_adjustment)
+        page.filters_changed.connect(self._filters_changed)
+        page.rotate_requested.connect(self._rotate_current)
+        page.save_requested.connect(self._save_current)
+        page.save_next_requested.connect(self._save_and_next)
+        page.save_export_requested.connect(self._save_and_show_export)
         return page
 
     def _build_export_page(self) -> ExportPage:
@@ -208,7 +140,7 @@ class ScannerWindow(QMainWindow):
     def resizeEvent(self, event: object) -> None:
         super().resizeEvent(event)
         if self._stack.currentWidget() == self._preview_page:
-            self._update_preview_label()
+            self._preview_page.refresh_preview()
 
     def _choose_images(self) -> None:
         filenames, _ = QFileDialog.getOpenFileNames(
@@ -226,9 +158,9 @@ class ScannerWindow(QMainWindow):
             return
         self._current_index = index
         item = self._items[index]
-        self._canvas.set_image(item.original_rgb)
-        self._canvas.set_polygon(item.corners)
-        self._sync_filter_checkboxes()
+        self._adjust_page.set_image(item.original_rgb)
+        self._adjust_page.set_polygon(item.corners)
+        self._preview_page.set_selected_filters(self._selected_filters)
         self._preview_image = None
         self._stack.setCurrentWidget(self._adjust_page)
 
@@ -250,14 +182,14 @@ class ScannerWindow(QMainWindow):
             return
         item.corners = item.detected_corners.copy()
         item.warped_rgb = None
-        self._canvas.set_polygon(item.corners)
+        self._adjust_page.set_polygon(item.corners)
 
     def _show_adjustment(self) -> None:
         item = self._current_item()
         if item is None:
             return
-        self._canvas.set_image(item.original_rgb)
-        self._canvas.set_polygon(item.corners)
+        self._adjust_page.set_image(item.original_rgb)
+        self._adjust_page.set_polygon(item.corners)
         self._stack.setCurrentWidget(self._adjust_page)
 
     def _show_preview(self) -> None:
@@ -278,15 +210,13 @@ class ScannerWindow(QMainWindow):
         item.status = ItemStatus.PREVIEWED
         self._refresh_list_item(self._current_index)
         self._stack.setCurrentWidget(self._preview_page)
-        self._update_preview_actions()
+        self._preview_page.set_save_actions_for_last_item(
+            self._current_index == len(self._items) - 1
+        )
         self._apply_current_filter()
 
-    def _filters_changed(self, *_args: object) -> None:
-        self._selected_filters = {
-            scan_filter
-            for scan_filter, checkbox in self._filter_checkboxes.items()
-            if checkbox.isChecked()
-        }
+    def _filters_changed(self, filters: set[ScanFilter]) -> None:
+        self._selected_filters = filters
         if self._stack.currentWidget() == self._preview_page:
             self._apply_current_filter()
 
@@ -305,13 +235,7 @@ class ScannerWindow(QMainWindow):
             self._refresh_list_item(self._current_index)
             QMessageBox.warning(self, "Filter Failed", str(exc))
             return
-        self._update_preview_label()
-
-    def _rotate_current_left(self) -> None:
-        self._rotate_current(-1)
-
-    def _rotate_current_right(self) -> None:
-        self._rotate_current(1)
+        self._preview_page.set_preview_image(self._preview_image)
 
     def _rotate_current(self, turns_delta: int) -> None:
         item = self._current_item()
@@ -326,18 +250,6 @@ class ScannerWindow(QMainWindow):
         if turns == 0:
             return image_rgb
         return np.ascontiguousarray(np.rot90(image_rgb, k=-turns))
-
-    def _update_preview_label(self) -> None:
-        if self._preview_image is None:
-            self._preview_label.clear()
-            return
-        pixmap = image_to_pixmap(self._preview_image)
-        scaled = pixmap.scaled(
-            self._preview_label.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self._preview_label.setPixmap(scaled)
 
     def _save_current(self) -> bool:
         if self._preview_image is None:
@@ -485,15 +397,3 @@ class ScannerWindow(QMainWindow):
         item = self._items[index]
         list_item.setText(f"{item.display_name} [{item.status}]")
         list_item.setToolTip(str(item.path))
-
-    def _sync_filter_checkboxes(self) -> None:
-        for scan_filter, checkbox in self._filter_checkboxes.items():
-            checkbox.blockSignals(True)
-            checkbox.setChecked(scan_filter in self._selected_filters)
-            checkbox.blockSignals(False)
-
-    def _update_preview_actions(self) -> None:
-        is_last = self._current_index == len(self._items) - 1
-        self._save_button.setVisible(not is_last)
-        self._save_next_button.setVisible(not is_last)
-        self._export_button.setVisible(is_last)
