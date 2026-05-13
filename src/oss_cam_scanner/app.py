@@ -3,11 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -29,7 +28,6 @@ from oss_cam_scanner.core.filters import ScanFilter, apply_filters
 from oss_cam_scanner.core.geometry import order_points, warp_perspective
 from oss_cam_scanner.core.io import (
     PdfPageLayout,
-    PdfPageSizeOption,
     image_to_pixmap,
     read_image_rgb,
     resolve_pdf_page_layout,
@@ -39,6 +37,7 @@ from oss_cam_scanner.core.io import (
 )
 from oss_cam_scanner.models import ImageArray, ImageItem, ItemStatus, PointArray
 from oss_cam_scanner.widgets.document_canvas import DocumentCanvas
+from oss_cam_scanner.widgets.export_page import ExportPage
 
 
 class ScannerWindow(QMainWindow):
@@ -50,7 +49,6 @@ class ScannerWindow(QMainWindow):
         self._selected_filters: set[ScanFilter] = set()
         self._filter_checkboxes: dict[ScanFilter, QCheckBox] = {}
         self._preview_image: np.ndarray | None = None
-        self._pdf_page_size_option = PdfPageSizeOption.AUTO
 
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._select_index)
@@ -180,56 +178,12 @@ class ScannerWindow(QMainWindow):
         layout.addLayout(actions)
         return page
 
-    def _build_export_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        header = QLabel("Saved Pages")
-        header.setStyleSheet("font-size: 18px; font-weight: 600;")
-        layout.addWidget(header)
-
-        self._export_list = QListWidget()
-        self._export_list.setIconSize(QSize(96, 128))
-        layout.addWidget(self._export_list, 1)
-
-        pdf_options = QGroupBox("PDF Page Size")
-        pdf_options_layout = QHBoxLayout(pdf_options)
-        self._pdf_page_size_combo = QComboBox()
-        for option in PdfPageSizeOption:
-            self._pdf_page_size_combo.addItem(option.value, option)
-        self._pdf_page_size_combo.currentIndexChanged.connect(
-            self._pdf_page_size_changed
-        )
-        self._pdf_page_size_label = QLabel("Auto selected: no saved pages")
-        pdf_options_layout.addWidget(self._pdf_page_size_combo)
-        pdf_options_layout.addWidget(self._pdf_page_size_label)
-        pdf_options_layout.addStretch()
-        layout.addWidget(pdf_options)
-
-        order_actions = QHBoxLayout()
-        move_up_button = QPushButton("Move Up")
-        move_up_button.clicked.connect(self._move_export_item_up)
-        move_down_button = QPushButton("Move Down")
-        move_down_button.clicked.connect(self._move_export_item_down)
-        order_actions.addWidget(move_up_button)
-        order_actions.addWidget(move_down_button)
-        order_actions.addStretch()
-        layout.addLayout(order_actions)
-
-        export_actions = QHBoxLayout()
-        back_button = QPushButton("Back To Editing")
-        back_button.clicked.connect(self._show_current_or_first_image)
-        export_images_button = QPushButton("Export Separate Images")
-        export_images_button.clicked.connect(self._export_images)
-        export_pdfs_button = QPushButton("Export Separate PDFs")
-        export_pdfs_button.clicked.connect(self._export_pdfs)
-        export_combined_button = QPushButton("Export Combined PDF")
-        export_combined_button.clicked.connect(self._export_combined_pdf)
-        export_actions.addWidget(back_button)
-        export_actions.addStretch()
-        export_actions.addWidget(export_images_button)
-        export_actions.addWidget(export_pdfs_button)
-        export_actions.addWidget(export_combined_button)
-        layout.addLayout(export_actions)
+    def _build_export_page(self) -> ExportPage:
+        page = ExportPage()
+        page.back_requested.connect(self._show_current_or_first_image)
+        page.export_images_requested.connect(self._export_images)
+        page.export_pdfs_requested.connect(self._export_pdfs)
+        page.export_combined_pdf_requested.connect(self._export_combined_pdf)
         return page
 
     def add_images(self, paths: list[Path]) -> None:
@@ -423,71 +377,16 @@ class ScannerWindow(QMainWindow):
             self._stack.setCurrentWidget(self._empty_page)
 
     def _show_export_page(self) -> None:
-        self._refresh_export_list()
-        if self._export_list.count() == 0:
+        self._export_page.set_items(self._items)
+        if self._export_page.count() == 0:
             QMessageBox.information(
                 self, "Nothing To Export", "Save at least one page before exporting."
             )
             return
         self._stack.setCurrentWidget(self._export_page)
 
-    def _refresh_export_list(self) -> None:
-        existing_order = [
-            self._export_list.item(row).data(Qt.ItemDataRole.UserRole)
-            for row in range(self._export_list.count())
-        ]
-        saved_indices = [
-            index
-            for index, item in enumerate(self._items)
-            if item.saved_rgb is not None
-        ]
-        ordered_indices = [index for index in existing_order if index in saved_indices]
-        ordered_indices.extend(
-            index for index in saved_indices if index not in ordered_indices
-        )
-
-        self._export_list.clear()
-        for index in ordered_indices:
-            item = self._items[index]
-            if item.saved_rgb is None:
-                continue
-            list_item = QListWidgetItem(f"{index + 1}. {item.display_name}")
-            list_item.setData(Qt.ItemDataRole.UserRole, index)
-            list_item.setToolTip(str(item.path))
-            list_item.setIcon(QIcon(image_to_pixmap(item.saved_rgb)))
-            self._export_list.addItem(list_item)
-        self._update_pdf_page_size_label()
-
-    def _saved_export_items_in_order(self) -> list[ImageItem]:
-        items: list[ImageItem] = []
-        for row in range(self._export_list.count()):
-            index = self._export_list.item(row).data(Qt.ItemDataRole.UserRole)
-            if isinstance(index, int) and 0 <= index < len(self._items):
-                item = self._items[index]
-                if item.saved_rgb is not None:
-                    items.append(item)
-        return items
-
-    def _move_export_item_up(self) -> None:
-        row = self._export_list.currentRow()
-        if row <= 0:
-            return
-        item = self._export_list.takeItem(row)
-        self._export_list.insertItem(row - 1, item)
-        self._export_list.setCurrentRow(row - 1)
-        self._update_pdf_page_size_label()
-
-    def _move_export_item_down(self) -> None:
-        row = self._export_list.currentRow()
-        if row < 0 or row >= self._export_list.count() - 1:
-            return
-        item = self._export_list.takeItem(row)
-        self._export_list.insertItem(row + 1, item)
-        self._export_list.setCurrentRow(row + 1)
-        self._update_pdf_page_size_label()
-
     def _export_images(self) -> None:
-        items = self._saved_export_items_in_order()
+        items = self._export_page.ordered_items(self._items)
         if not items:
             QMessageBox.information(
                 self, "Nothing To Export", "Save at least one page before exporting."
@@ -509,7 +408,7 @@ class ScannerWindow(QMainWindow):
             QMessageBox.warning(self, "Export Failed", str(exc))
 
     def _export_pdfs(self) -> None:
-        items = self._saved_export_items_in_order()
+        items = self._export_page.ordered_items(self._items)
         if not items:
             QMessageBox.information(
                 self, "Nothing To Export", "Save at least one page before exporting."
@@ -534,7 +433,7 @@ class ScannerWindow(QMainWindow):
             QMessageBox.warning(self, "Export Failed", str(exc))
 
     def _export_combined_pdf(self) -> None:
-        items = self._saved_export_items_in_order()
+        items = self._export_page.ordered_items(self._items)
         if not items:
             QMessageBox.information(
                 self, "Nothing To Export", "Save at least one page before exporting."
@@ -562,15 +461,6 @@ class ScannerWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, "Export Failed", str(exc))
 
-    def _pdf_page_size_changed(self, index: int) -> None:
-        option = self._pdf_page_size_combo.itemData(index)
-        self._pdf_page_size_option = (
-            option
-            if isinstance(option, PdfPageSizeOption)
-            else PdfPageSizeOption(str(option))
-        )
-        self._update_pdf_page_size_label()
-
     def _resolve_current_pdf_layout(self, items: list[ImageItem]) -> PdfPageLayout:
         first_saved = next(
             (item.saved_rgb for item in items if item.saved_rgb is not None),
@@ -578,21 +468,10 @@ class ScannerWindow(QMainWindow):
         )
         if first_saved is None:
             raise ValueError("Cannot export a PDF without saved pages.")
-        return resolve_pdf_page_layout(self._pdf_page_size_option, first_saved)
-
-    def _update_pdf_page_size_label(self) -> None:
-        items = self._saved_export_items_in_order()
-        if not items:
-            if self._pdf_page_size_option == PdfPageSizeOption.AUTO:
-                self._pdf_page_size_label.setText("Auto selected: no saved pages")
-            else:
-                self._pdf_page_size_label.setText("PDF page size: no saved pages")
-            return
-        layout = self._resolve_current_pdf_layout(items)
-        if self._pdf_page_size_option == PdfPageSizeOption.AUTO:
-            self._pdf_page_size_label.setText(f"Auto selected: {layout.name}")
-        else:
-            self._pdf_page_size_label.setText(f"PDF page size: {layout.name}")
+        return resolve_pdf_page_layout(
+            self._export_page.pdf_page_size_option,
+            first_saved,
+        )
 
     def _format_list_item(self, item: ImageItem) -> QListWidgetItem:
         widget_item = QListWidgetItem(f"{item.display_name} [{item.status}]")
