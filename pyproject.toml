@@ -1,0 +1,19 @@
+[project]
+name = "oss-cam-scanner"
+version = "0.1.0"
+description = "A desktop document scanner for photos."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0.0",
+    "opencv-python-headless>=4.10.0.84",
+    "pillow>=10.4.0",
+    "pyside6>=6.7.0",
+]
+
+[project.scripts]
+oss-cam-scanner = "oss_cam_scanner.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
