@@ -153,6 +153,12 @@ class ScannerWindow(QMainWindow):
             checkbox.stateChanged.connect(self._filters_changed)
             self._filter_checkboxes[scan_filter] = checkbox
             filter_panel.addWidget(checkbox)
+        rotate_left_button = QPushButton("Rotate Left")
+        rotate_left_button.clicked.connect(self._rotate_current_left)
+        rotate_right_button = QPushButton("Rotate Right")
+        rotate_right_button.clicked.connect(self._rotate_current_right)
+        filter_panel.addWidget(rotate_left_button)
+        filter_panel.addWidget(rotate_right_button)
         filter_panel.addStretch()
 
         actions = QHBoxLayout()
@@ -337,7 +343,8 @@ class ScannerWindow(QMainWindow):
         try:
             if item.warped_rgb is None:
                 item.warped_rgb = warp_perspective(item.original_rgb, item.corners)
-            self._preview_image = apply_filters(item.warped_rgb, self._selected_filters)
+            filtered_rgb = apply_filters(item.warped_rgb, self._selected_filters)
+            self._preview_image = self._rotate_image(filtered_rgb, item.rotation_turns)
         except Exception as exc:
             item.status = ItemStatus.FAILED
             item.error = str(exc)
@@ -345,6 +352,26 @@ class ScannerWindow(QMainWindow):
             QMessageBox.warning(self, "Filter Failed", str(exc))
             return
         self._update_preview_label()
+
+    def _rotate_current_left(self) -> None:
+        self._rotate_current(-1)
+
+    def _rotate_current_right(self) -> None:
+        self._rotate_current(1)
+
+    def _rotate_current(self, turns_delta: int) -> None:
+        item = self._current_item()
+        if item is None:
+            return
+        item.rotation_turns = (item.rotation_turns + turns_delta) % 4
+        self._preview_image = None
+        self._apply_current_filter()
+
+    def _rotate_image(self, image_rgb: ImageArray, clockwise_turns: int) -> ImageArray:
+        turns = clockwise_turns % 4
+        if turns == 0:
+            return image_rgb
+        return np.ascontiguousarray(np.rot90(image_rgb, k=-turns))
 
     def _update_preview_label(self) -> None:
         if self._preview_image is None:

@@ -35,6 +35,7 @@ class ImageItem:
     status: ItemStatus = ItemStatus.PENDING
     warped_rgb: ImageArray | None = None
     saved_rgb: ImageArray | None = None
+    rotation_turns: int = 0
     error: str | None = None
 
     @property
