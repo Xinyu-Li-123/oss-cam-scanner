@@ -49,3 +49,5 @@ The filters avoid hard black-and-white thresholding so dark regions and graphics
 - Export Images writes one PNG per saved page with a -scan suffix.
 - Export PDFs writes one PDF per saved page with a -scan suffix.
 - Export Combined PDF writes saved pages into one PDF. Pages start in upload order and can be rearranged before export.
+- PDF export supports Auto, A4, Letter, and Fit to image page sizes.
+- Auto chooses one page size from the first saved page in the export order and shows that choice in the UI.

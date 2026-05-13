@@ -7,6 +7,7 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -27,13 +28,16 @@ from oss_cam_scanner.core.detection import detect_document
 from oss_cam_scanner.core.filters import ScanFilter, apply_filters
 from oss_cam_scanner.core.geometry import order_points, warp_perspective
 from oss_cam_scanner.core.io import (
+    PdfPageLayout,
+    PdfPageSizeOption,
     image_to_pixmap,
     read_image_rgb,
+    resolve_pdf_page_layout,
     write_combined_pdf,
     write_image,
     write_pdf,
 )
-from oss_cam_scanner.models import ImageItem, ItemStatus, PointArray
+from oss_cam_scanner.models import ImageArray, ImageItem, ItemStatus, PointArray
 from oss_cam_scanner.widgets.document_canvas import DocumentCanvas
 
 
@@ -46,6 +50,7 @@ class ScannerWindow(QMainWindow):
         self._selected_filters: set[ScanFilter] = set()
         self._filter_checkboxes: dict[ScanFilter, QCheckBox] = {}
         self._preview_image: np.ndarray | None = None
+        self._pdf_page_size_option = PdfPageSizeOption.AUTO
 
         self._list = QListWidget()
         self._list.currentRowChanged.connect(self._select_index)
@@ -157,7 +162,7 @@ class ScannerWindow(QMainWindow):
         self._save_button.clicked.connect(self._save_current)
         self._save_next_button = QPushButton("Save And Next")
         self._save_next_button.clicked.connect(self._save_and_next)
-        self._export_button = QPushButton("Saven And Export")
+        self._export_button = QPushButton("Save And Export")
         self._export_button.clicked.connect(self._save_and_show_export)
 
         actions.addStretch()
@@ -179,6 +184,20 @@ class ScannerWindow(QMainWindow):
         self._export_list = QListWidget()
         self._export_list.setIconSize(QSize(96, 128))
         layout.addWidget(self._export_list, 1)
+
+        pdf_options = QGroupBox("PDF Page Size")
+        pdf_options_layout = QHBoxLayout(pdf_options)
+        self._pdf_page_size_combo = QComboBox()
+        for option in PdfPageSizeOption:
+            self._pdf_page_size_combo.addItem(option.value, option)
+        self._pdf_page_size_combo.currentIndexChanged.connect(
+            self._pdf_page_size_changed
+        )
+        self._pdf_page_size_label = QLabel("Auto selected: no saved pages")
+        pdf_options_layout.addWidget(self._pdf_page_size_combo)
+        pdf_options_layout.addWidget(self._pdf_page_size_label)
+        pdf_options_layout.addStretch()
+        layout.addWidget(pdf_options)
 
         order_actions = QHBoxLayout()
         move_up_button = QPushButton("Move Up")
@@ -410,6 +429,7 @@ class ScannerWindow(QMainWindow):
             list_item.setToolTip(str(item.path))
             list_item.setIcon(QIcon(image_to_pixmap(item.saved_rgb)))
             self._export_list.addItem(list_item)
+        self._update_pdf_page_size_label()
 
     def _saved_export_items_in_order(self) -> list[ImageItem]:
         items: list[ImageItem] = []
@@ -428,6 +448,7 @@ class ScannerWindow(QMainWindow):
         item = self._export_list.takeItem(row)
         self._export_list.insertItem(row - 1, item)
         self._export_list.setCurrentRow(row - 1)
+        self._update_pdf_page_size_label()
 
     def _move_export_item_down(self) -> None:
         row = self._export_list.currentRow()
@@ -436,6 +457,7 @@ class ScannerWindow(QMainWindow):
         item = self._export_list.takeItem(row)
         self._export_list.insertItem(row + 1, item)
         self._export_list.setCurrentRow(row + 1)
+        self._update_pdf_page_size_label()
 
     def _export_images(self) -> None:
         items = self._saved_export_items_in_order()
@@ -470,10 +492,13 @@ class ScannerWindow(QMainWindow):
         if not directory:
             return
         try:
+            layout = self._resolve_current_pdf_layout(items)
             for item in items:
                 assert item.saved_rgb is not None
                 write_pdf(
-                    Path(directory) / f"{item.path.stem}-scan.pdf", item.saved_rgb
+                    Path(directory) / f"{item.path.stem}-scan.pdf",
+                    item.saved_rgb,
+                    layout,
                 )
             QMessageBox.information(
                 self, "Export Complete", f"Exported {len(items)} PDF file(s)."
@@ -498,16 +523,49 @@ class ScannerWindow(QMainWindow):
         if not filename:
             return
         try:
-            images: list[np.ndarray] = []
+            images: list[ImageArray] = []
             for item in items:
                 if item.saved_rgb is not None:
                     images.append(item.saved_rgb)
-            write_combined_pdf(Path(filename), images)
+            layout = self._resolve_current_pdf_layout(items)
+            write_combined_pdf(Path(filename), images, layout)
             QMessageBox.information(
                 self, "Export Complete", f"Exported {len(images)} page PDF."
             )
         except Exception as exc:
             QMessageBox.warning(self, "Export Failed", str(exc))
+
+    def _pdf_page_size_changed(self, index: int) -> None:
+        option = self._pdf_page_size_combo.itemData(index)
+        self._pdf_page_size_option = (
+            option
+            if isinstance(option, PdfPageSizeOption)
+            else PdfPageSizeOption(str(option))
+        )
+        self._update_pdf_page_size_label()
+
+    def _resolve_current_pdf_layout(self, items: list[ImageItem]) -> PdfPageLayout:
+        first_saved = next(
+            (item.saved_rgb for item in items if item.saved_rgb is not None),
+            None,
+        )
+        if first_saved is None:
+            raise ValueError("Cannot export a PDF without saved pages.")
+        return resolve_pdf_page_layout(self._pdf_page_size_option, first_saved)
+
+    def _update_pdf_page_size_label(self) -> None:
+        items = self._saved_export_items_in_order()
+        if not items:
+            if self._pdf_page_size_option == PdfPageSizeOption.AUTO:
+                self._pdf_page_size_label.setText("Auto selected: no saved pages")
+            else:
+                self._pdf_page_size_label.setText("PDF page size: no saved pages")
+            return
+        layout = self._resolve_current_pdf_layout(items)
+        if self._pdf_page_size_option == PdfPageSizeOption.AUTO:
+            self._pdf_page_size_label.setText(f"Auto selected: {layout.name}")
+        else:
+            self._pdf_page_size_label.setText(f"PDF page size: {layout.name}")
 
     def _format_list_item(self, item: ImageItem) -> QListWidgetItem:
         widget_item = QListWidgetItem(f"{item.display_name} [{item.status}]")
