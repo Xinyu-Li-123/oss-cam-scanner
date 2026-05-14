@@ -8,9 +8,11 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QStackedWidget,
     QToolBar,
+    QToolButton,
     QWidget,
 )
 
@@ -133,18 +135,22 @@ class ScannerWindow(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
+        file_menu = QMenu("File", self)
         open_action = QAction("Open Images", self)
         open_action.triggered.connect(self._choose_images)
-        toolbar.addAction(open_action)
+        file_menu.addAction(open_action)
 
-        reset_action = QAction("Reset Corners", self)
-        reset_action.triggered.connect(self._reset_corners)
-        toolbar.addAction(reset_action)
+        export_action = QAction("Export", self)
+        export_action.triggered.connect(self._show_export_page)
+        file_menu.addAction(export_action)
 
-        save_action = QAction("Save For Export", self)
-        save_action.triggered.connect(self._save_current)
-        toolbar.addAction(save_action)
+        file_button = QToolButton(self)
+        file_button.setText("File")
+        file_button.setMenu(file_menu)
+        file_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        toolbar.addWidget(file_button)
 
+        preference_menu = QMenu("Preference", self)
         apply_filters_action = QAction("Apply First Saved Filters To All Pages", self)
         apply_filters_action.setCheckable(True)
         apply_filters_action.setChecked(
@@ -153,11 +159,13 @@ class ScannerWindow(QMainWindow):
         apply_filters_action.toggled.connect(
             self._preference_state.set_apply_first_saved_filters_to_all_pages
         )
-        toolbar.addAction(apply_filters_action)
+        preference_menu.addAction(apply_filters_action)
 
-        export_action = QAction("Export", self)
-        export_action.triggered.connect(self._show_export_page)
-        toolbar.addAction(export_action)
+        preference_button = QToolButton(self)
+        preference_button.setText("Preference")
+        preference_button.setMenu(preference_menu)
+        preference_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        toolbar.addWidget(preference_button)
 
     def _connect_app_level_signals(self) -> None:
         self._empty_page.open_images_requested.connect(self._choose_images)
@@ -193,24 +201,6 @@ class ScannerWindow(QMainWindow):
             "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)",
         )
         self.add_images([Path(filename) for filename in filenames])
-
-    def _reset_corners(self) -> None:
-        self._edit_controller.reset_current_corners()
-        self._adjust_binder.refresh_from_current_item()
-
-    def _save_current(self) -> None:
-        if self._stack.currentWidget() != self._preview_page:
-            if not self._prepare_and_show_preview():
-                return
-        self._preview_binder.save_current()
-
-    def _prepare_and_show_preview(self) -> bool:
-        result = self._edit_controller.prepare_current_preview()
-        if not result.ok:
-            self._show_preview_failed(result.error or "Could not warp document region.")
-            return False
-        self._show_preview_page()
-        return True
 
     def _show_selected_index(self, index: int) -> None:
         if index < 0:
