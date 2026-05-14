@@ -119,7 +119,6 @@ class PreviewPage(QWidget):
         self._preview_label.setPixmap(scaled)
 
     def set_save_actions_for_last_item(self, is_last: bool) -> None:
-        self._save_button.setVisible(not is_last)
         self._save_next_button.setVisible(not is_last)
         self._export_button.setVisible(is_last)
 
