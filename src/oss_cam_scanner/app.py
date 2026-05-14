@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QSettings
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -25,7 +26,12 @@ from oss_cam_scanner.controllers import (
     ImportController,
     PreviewController,
 )
-from oss_cam_scanner.stores import DocumentStore, ExportState, PreviewState
+from oss_cam_scanner.stores import (
+    DocumentStore,
+    ExportState,
+    PreferenceState,
+    PreviewState,
+)
 from oss_cam_scanner.widgets.adjust_page import AdjustPage
 from oss_cam_scanner.widgets.empty_page import EmptyPage
 from oss_cam_scanner.widgets.export_page import ExportPage
@@ -41,12 +47,20 @@ class ScannerWindow(QMainWindow):
         self._store = DocumentStore(self)
         self._preview_state = PreviewState(self)
         self._export_state = ExportState(self)
+        self._settings = QSettings(
+            QSettings.Format.IniFormat,
+            QSettings.Scope.UserScope,
+            "oss-cam-scanner",
+            "oss-cam-scanner",
+        )
+        self._preference_state = PreferenceState(self._settings, self)
 
         self._import_controller = ImportController(self._store)
         self._edit_controller = EditController(self._store, self._preview_state)
         self._preview_controller = PreviewController(
             self._store,
             self._preview_state,
+            self._preference_state,
         )
         self._export_controller = ExportController(self._store, self._export_state)
 
@@ -130,6 +144,16 @@ class ScannerWindow(QMainWindow):
         save_action = QAction("Save For Export", self)
         save_action.triggered.connect(self._save_current)
         toolbar.addAction(save_action)
+
+        apply_filters_action = QAction("Apply First Saved Filters To All Pages", self)
+        apply_filters_action.setCheckable(True)
+        apply_filters_action.setChecked(
+            self._preference_state.apply_first_saved_filters_to_all_pages()
+        )
+        apply_filters_action.toggled.connect(
+            self._preference_state.set_apply_first_saved_filters_to_all_pages
+        )
+        toolbar.addAction(apply_filters_action)
 
         export_action = QAction("Export", self)
         export_action.triggered.connect(self._show_export_page)

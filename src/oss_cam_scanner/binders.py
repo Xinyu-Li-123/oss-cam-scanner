@@ -120,11 +120,12 @@ class PreviewPageBinder(QObject):
         self._page.save_export_requested.connect(self._save_and_export)
 
         preview_state.preview_image_changed.connect(self._page.set_preview_image)
-        preview_state.filters_changed.connect(self._page.set_selected_filters)
         self._store.current_index_changed.connect(self.refresh_action_visibility)
+        self._store.current_item_changed.connect(self._show_current_filters)
         self.refresh_action_visibility()
 
     def refresh_preview(self) -> None:
+        self._show_current_filters(self._store.current_item())
         result = self._preview_controller.refresh_preview()
         if not result.ok:
             self.preview_failed.emit(result.error or "Could not refresh preview.")
@@ -139,9 +140,15 @@ class PreviewPageBinder(QObject):
         self._save_current()
 
     def _set_filters(self, filters: object) -> None:
-        result = self._preview_controller.set_filters(set(filters))
+        result = self._preview_controller.set_current_filters(set(filters))
         if not result.ok:
             self.preview_failed.emit(result.error or "Could not apply filters.")
+
+    def _show_current_filters(self, item: ImageItem | None) -> None:
+        if item is None:
+            self._page.set_selected_filters(set())
+            return
+        self._page.set_selected_filters(item.selected_filters)
 
     def _rotate_current(self, turns_delta: int) -> None:
         result = self._preview_controller.rotate_current(turns_delta)

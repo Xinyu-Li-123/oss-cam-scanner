@@ -17,7 +17,12 @@ from oss_cam_scanner.core.io import (
     write_pdf,
 )
 from oss_cam_scanner.models import ImageArray, ImageItem, ItemStatus, PointArray
-from oss_cam_scanner.stores import DocumentStore, ExportState, PreviewState
+from oss_cam_scanner.stores import (
+    DocumentStore,
+    ExportState,
+    PreferenceState,
+    PreviewState,
+)
 
 
 @dataclass(slots=True)
@@ -132,12 +137,22 @@ class EditController:
 
 
 class PreviewController:
-    def __init__(self, store: DocumentStore, preview_state: PreviewState) -> None:
+    def __init__(
+        self,
+        store: DocumentStore,
+        preview_state: PreviewState,
+        preference_state: PreferenceState,
+    ) -> None:
         self._store = store
         self._preview_state = preview_state
+        self._preference_state = preference_state
 
-    def set_filters(self, filters: set[ScanFilter]) -> PreviewResult:
-        self._preview_state.set_selected_filters(filters)
+    def set_current_filters(self, filters: set[ScanFilter]) -> PreviewResult:
+        index = self._store.current_index()
+        if index < 0:
+            return PreviewResult(ok=False, error="No image is selected.")
+        self._store.set_item_filters(index, filters)
+        self._preview_state.clear_preview_image()
         return self.refresh_preview()
 
     def refresh_preview(self) -> PreviewResult:
@@ -152,7 +167,7 @@ class PreviewController:
                 self._store.set_item_warped_image(index, warped_rgb)
             filtered_rgb = apply_filters(
                 warped_rgb,
-                self._preview_state.selected_filters(),
+                item.selected_filters,
             )
             image = self._rotate_image(filtered_rgb, item.rotation_turns)
         except Exception as exc:
@@ -185,6 +200,14 @@ class PreviewController:
             return SaveResult(ok=False, index=index, error="No preview image exists.")
         self._store.set_item_saved_image(index, preview_image.copy())
         self._store.set_item_status(index, ItemStatus.SAVED)
+        item = self._store.item(index)
+        if (
+            item is not None
+            and self._preference_state.apply_first_saved_filters_to_all_pages()
+            and not self._preview_state.first_saved_filters_applied()
+        ):
+            self._store.set_all_item_filters(item.selected_filters)
+            self._preview_state.set_first_saved_filters_applied(True)
         return SaveResult(ok=True, index=index)
 
     def save_current_and_select_next(self) -> SaveNextResult:

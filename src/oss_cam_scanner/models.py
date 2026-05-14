@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from oss_cam_scanner.core.filters import ScanFilter
 
 ImageArray = NDArray[np.uint8]
 PointArray = NDArray[np.float32]
@@ -35,6 +39,7 @@ class ImageItem:
     status: ItemStatus = ItemStatus.PENDING
     warped_rgb: ImageArray | None = None
     saved_rgb: ImageArray | None = None
+    selected_filters: set[ScanFilter] = field(default_factory=set)
     rotation_turns: int = 0
     error: str | None = None
 

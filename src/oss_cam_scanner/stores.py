@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QSettings, Signal
 
 from oss_cam_scanner.core.filters import ScanFilter
 from oss_cam_scanner.core.io import PdfPageSizeOption
@@ -92,6 +92,19 @@ class DocumentStore(QObject):
         if had_saved != (image is not None):
             self.saved_items_changed.emit()
 
+    def set_item_filters(self, index: int, filters: set[ScanFilter]) -> None:
+        item = self.item(index)
+        if item is None:
+            return
+        item.selected_filters = set(filters)
+        self._emit_item_changed(index)
+
+    def set_all_item_filters(self, filters: set[ScanFilter]) -> None:
+        selected_filters = set(filters)
+        for index, item in enumerate(self._items):
+            item.selected_filters = set(selected_filters)
+            self._emit_item_changed(index)
+
     def set_item_rotation(self, index: int, turns: int) -> None:
         item = self.item(index)
         if item is None:
@@ -137,20 +150,18 @@ class DocumentStore(QObject):
 
 
 class PreviewState(QObject):
-    filters_changed = Signal(object)
     preview_image_changed = Signal(object)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._selected_filters: set[ScanFilter] = set()
         self._preview_image: ImageArray | None = None
+        self._first_saved_filters_applied = False
 
-    def selected_filters(self) -> set[ScanFilter]:
-        return set(self._selected_filters)
+    def first_saved_filters_applied(self) -> bool:
+        return self._first_saved_filters_applied
 
-    def set_selected_filters(self, filters: set[ScanFilter]) -> None:
-        self._selected_filters = set(filters)
-        self.filters_changed.emit(self.selected_filters())
+    def set_first_saved_filters_applied(self, applied: bool) -> None:
+        self._first_saved_filters_applied = applied
 
     def preview_image(self) -> ImageArray | None:
         return self._preview_image
@@ -161,6 +172,32 @@ class PreviewState(QObject):
 
     def clear_preview_image(self) -> None:
         self.set_preview_image(None)
+
+
+class PreferenceState(QObject):
+    apply_first_saved_filters_to_all_pages_changed = Signal(bool)
+
+    def __init__(self, settings: QSettings, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._settings = settings
+        self._apply_first_saved_filters_to_all_pages = settings.value(
+            "preview/apply_first_saved_filters_to_all_pages",
+            True,
+            type=bool,
+        )
+
+    def apply_first_saved_filters_to_all_pages(self) -> bool:
+        return self._apply_first_saved_filters_to_all_pages
+
+    def set_apply_first_saved_filters_to_all_pages(self, enabled: bool) -> None:
+        if enabled == self._apply_first_saved_filters_to_all_pages:
+            return
+        self._apply_first_saved_filters_to_all_pages = enabled
+        self._settings.setValue(
+            "preview/apply_first_saved_filters_to_all_pages",
+            enabled,
+        )
+        self.apply_first_saved_filters_to_all_pages_changed.emit(enabled)
 
 
 class ExportState(QObject):
