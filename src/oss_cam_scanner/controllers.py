@@ -177,6 +177,17 @@ class PreviewController:
         self._preview_state.set_preview_image(image)
         return PreviewResult(ok=True, image=image)
 
+    def show_saved_preview(self) -> PreviewResult:
+        index = self._store.current_index()
+        item = self._store.current_item()
+        if item is None:
+            return PreviewResult(ok=False, error="No image is selected.")
+        if item.saved_rgb is None:
+            return PreviewResult(ok=False, error="No saved preview exists.")
+        self._store.set_item_filters(index, item.saved_filters)
+        self._preview_state.set_preview_image(item.saved_rgb)
+        return PreviewResult(ok=True, image=item.saved_rgb)
+
     def rotate_current(self, turns_delta: int) -> PreviewResult:
         index = self._store.current_index()
         item = self._store.current_item()
@@ -199,6 +210,9 @@ class PreviewController:
         if preview_image is None:
             return SaveResult(ok=False, index=index, error="No preview image exists.")
         self._store.set_item_saved_image(index, preview_image.copy())
+        item = self._store.item(index)
+        if item is not None:
+            self._store.set_item_saved_filters(index, item.selected_filters)
         self._store.set_item_status(index, ItemStatus.SAVED)
         item = self._store.item(index)
         if (

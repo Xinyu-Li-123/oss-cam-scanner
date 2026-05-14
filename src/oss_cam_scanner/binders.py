@@ -130,6 +130,13 @@ class PreviewPageBinder(QObject):
         if not result.ok:
             self.preview_failed.emit(result.error or "Could not refresh preview.")
 
+    def show_saved_preview(self) -> None:
+        result = self._preview_controller.show_saved_preview()
+        if not result.ok:
+            self.preview_failed.emit(result.error or "Could not show saved preview.")
+            return
+        self._show_current_filters(self._store.current_item())
+
     def refresh_action_visibility(self, *_args: object) -> None:
         current_index = self._store.current_index()
         self._page.set_save_actions_for_last_item(

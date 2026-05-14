@@ -206,6 +206,10 @@ class ScannerWindow(QMainWindow):
         if index < 0:
             self._stack.setCurrentWidget(self._empty_page)
             return
+        item = self._store.item(index)
+        if item is not None and item.saved_rgb is not None:
+            self._show_saved_preview_page()
+            return
         self._show_adjustment()
 
     def _show_adjustment(self) -> None:
@@ -220,9 +224,13 @@ class ScannerWindow(QMainWindow):
         self._preview_binder.refresh_action_visibility()
         self._preview_binder.refresh_preview()
 
+    def _show_saved_preview_page(self) -> None:
+        self._stack.setCurrentWidget(self._preview_page)
+        self._preview_binder.refresh_action_visibility()
+        self._preview_binder.show_saved_preview()
+
     def _select_next_index(self, index: int) -> None:
         self._store.set_current_index(index)
-        self._show_adjustment()
 
     def _show_current_or_first_image(self) -> None:
         if self._store.current_index() >= 0:

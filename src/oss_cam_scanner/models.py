@@ -40,6 +40,7 @@ class ImageItem:
     warped_rgb: ImageArray | None = None
     saved_rgb: ImageArray | None = None
     selected_filters: set[ScanFilter] = field(default_factory=set)
+    saved_filters: set[ScanFilter] = field(default_factory=set)
     rotation_turns: int = 0
     error: str | None = None
 

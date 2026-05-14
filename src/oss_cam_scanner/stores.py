@@ -99,6 +99,13 @@ class DocumentStore(QObject):
         item.selected_filters = set(filters)
         self._emit_item_changed(index)
 
+    def set_item_saved_filters(self, index: int, filters: set[ScanFilter]) -> None:
+        item = self.item(index)
+        if item is None:
+            return
+        item.saved_filters = set(filters)
+        self._emit_item_changed(index)
+
     def set_all_item_filters(self, filters: set[ScanFilter]) -> None:
         selected_filters = set(filters)
         for index, item in enumerate(self._items):
