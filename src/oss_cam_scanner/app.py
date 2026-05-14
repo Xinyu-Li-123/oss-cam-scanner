@@ -2,13 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QStackedWidget,
@@ -16,21 +13,23 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from oss_cam_scanner.core.detection import detect_document
-from oss_cam_scanner.core.filters import ScanFilter, apply_filters
-from oss_cam_scanner.core.geometry import order_points, warp_perspective
-from oss_cam_scanner.core.io import (
-    PdfPageLayout,
-    read_image_rgb,
-    resolve_pdf_page_layout,
-    write_combined_pdf,
-    write_image,
-    write_pdf,
+from oss_cam_scanner.binders import (
+    AdjustPageBinder,
+    ExportPageBinder,
+    ImageListBinder,
+    PreviewPageBinder,
 )
-from oss_cam_scanner.models import ImageArray, ImageItem, ItemStatus, PointArray
+from oss_cam_scanner.controllers import (
+    EditController,
+    ExportController,
+    ImportController,
+    PreviewController,
+)
+from oss_cam_scanner.stores import DocumentStore, ExportState, PreviewState
 from oss_cam_scanner.widgets.adjust_page import AdjustPage
 from oss_cam_scanner.widgets.empty_page import EmptyPage
 from oss_cam_scanner.widgets.export_page import ExportPage
+from oss_cam_scanner.widgets.image_list import ImageListView
 from oss_cam_scanner.widgets.preview_page import PreviewPage
 
 
@@ -38,34 +37,82 @@ class ScannerWindow(QMainWindow):
     def __init__(self, startup_paths: list[Path] | None = None) -> None:
         super().__init__()
         self.setWindowTitle("OSS Cam Scanner")
-        self._items: list[ImageItem] = []
-        self._current_index = -1
-        self._selected_filters: set[ScanFilter] = set()
-        self._preview_image: np.ndarray | None = None
 
-        self._list = QListWidget()
-        self._list.currentRowChanged.connect(self._select_index)
+        self._store = DocumentStore(self)
+        self._preview_state = PreviewState(self)
+        self._export_state = ExportState(self)
 
+        self._import_controller = ImportController(self._store)
+        self._edit_controller = EditController(self._store, self._preview_state)
+        self._preview_controller = PreviewController(
+            self._store,
+            self._preview_state,
+        )
+        self._export_controller = ExportController(self._store, self._export_state)
+
+        self._sidebar = ImageListView()
         self._stack = QStackedWidget()
-        self._empty_page = self._build_empty_page()
-        self._adjust_page = self._build_adjust_page()
-        self._preview_page = self._build_preview_page()
-        self._export_page = self._build_export_page()
+        self._empty_page = EmptyPage()
+        self._adjust_page = AdjustPage()
+        self._preview_page = PreviewPage()
+        self._export_page = ExportPage()
+
         self._stack.addWidget(self._empty_page)
         self._stack.addWidget(self._adjust_page)
         self._stack.addWidget(self._preview_page)
         self._stack.addWidget(self._export_page)
 
-        root = QWidget()
-        layout = QHBoxLayout(root)
-        layout.addWidget(self._list, 1)
-        layout.addWidget(self._stack, 4)
-        self.setCentralWidget(root)
+        self._sidebar_binder = ImageListBinder(self._sidebar, self._store, self)
+        self._adjust_binder = AdjustPageBinder(
+            self._adjust_page,
+            self._store,
+            self._edit_controller,
+            self,
+        )
+        self._preview_binder = PreviewPageBinder(
+            self._preview_page,
+            self._store,
+            self._preview_state,
+            self._preview_controller,
+            self,
+        )
+        self._export_binder = ExportPageBinder(
+            self._export_page,
+            self._store,
+            self._export_state,
+            self._export_controller,
+            self,
+        )
 
+        self._build_layout()
         self._build_toolbar()
+        self._connect_app_level_signals()
 
         if startup_paths:
             self.add_images(startup_paths)
+
+    def add_images(self, paths: list[Path]) -> None:
+        result = self._import_controller.add_images(paths)
+        for failure in result.failures:
+            QMessageBox.warning(
+                self,
+                "Open Image Failed",
+                f"{failure.path}\n\n{failure.error}",
+            )
+        if result.imported_indices and self._store.current_index() < 0:
+            self._store.set_current_index(result.imported_indices[0])
+
+    def resizeEvent(self, event: object) -> None:
+        super().resizeEvent(event)
+        if self._stack.currentWidget() == self._preview_page:
+            self._preview_page.refresh_preview()
+
+    def _build_layout(self) -> None:
+        root = QWidget()
+        layout = QHBoxLayout(root)
+        layout.addWidget(self._sidebar, 1)
+        layout.addWidget(self._stack, 4)
+        self.setCentralWidget(root)
 
     def _build_toolbar(self) -> None:
         toolbar = QToolBar("Main")
@@ -88,59 +135,31 @@ class ScannerWindow(QMainWindow):
         export_action.triggered.connect(self._show_export_page)
         toolbar.addAction(export_action)
 
-    def _build_empty_page(self) -> EmptyPage:
-        page = EmptyPage()
-        page.open_images_requested.connect(self._choose_images)
-        return page
+    def _connect_app_level_signals(self) -> None:
+        self._empty_page.open_images_requested.connect(self._choose_images)
+        self._store.current_index_changed.connect(self._show_selected_index)
 
-    def _build_adjust_page(self) -> AdjustPage:
-        page = AdjustPage()
-        page.polygon_changed.connect(self._set_current_polygon)
-        page.reset_requested.connect(self._reset_corners)
-        page.preview_requested.connect(self._show_preview)
-        return page
+        self._adjust_binder.preview_ready.connect(self._show_preview_page)
+        self._adjust_binder.preview_failed.connect(self._show_preview_failed)
 
-    def _build_preview_page(self) -> PreviewPage:
-        page = PreviewPage()
-        page.back_requested.connect(self._show_adjustment)
-        page.filters_changed.connect(self._filters_changed)
-        page.rotate_requested.connect(self._rotate_current)
-        page.save_requested.connect(self._save_current)
-        page.save_next_requested.connect(self._save_and_next)
-        page.save_export_requested.connect(self._save_and_show_export)
-        return page
+        self._preview_binder.back_requested.connect(self._show_adjustment)
+        self._preview_binder.preview_failed.connect(self._show_preview_operation_failed)
+        self._preview_binder.save_failed.connect(self._show_save_failed)
+        self._preview_binder.next_requested.connect(self._select_next_index)
+        self._preview_binder.export_requested.connect(self._show_export_page)
 
-    def _build_export_page(self) -> ExportPage:
-        page = ExportPage()
-        page.back_requested.connect(self._show_current_or_first_image)
-        page.export_images_requested.connect(self._export_images)
-        page.export_pdfs_requested.connect(self._export_pdfs)
-        page.export_combined_pdf_requested.connect(self._export_combined_pdf)
-        return page
-
-    def add_images(self, paths: list[Path]) -> None:
-        for path in paths:
-            try:
-                image = read_image_rgb(path)
-                detection = detect_document(image)
-                item = ImageItem(
-                    path=path,
-                    original_rgb=image,
-                    detected_corners=detection.corners.copy(),
-                    corners=detection.corners.copy(),
-                )
-                self._items.append(item)
-                self._list.addItem(self._format_list_item(item))
-            except Exception as exc:
-                QMessageBox.warning(self, "Open Image Failed", f"{path}\n\n{exc}")
-
-        if self._items and self._current_index < 0:
-            self._list.setCurrentRow(0)
-
-    def resizeEvent(self, event: object) -> None:
-        super().resizeEvent(event)
-        if self._stack.currentWidget() == self._preview_page:
-            self._preview_page.refresh_preview()
+        self._export_binder.back_requested.connect(self._show_current_or_first_image)
+        self._export_binder.export_images_path_requested.connect(
+            self._choose_export_image_directory
+        )
+        self._export_binder.export_pdfs_path_requested.connect(
+            self._choose_export_pdf_directory
+        )
+        self._export_binder.export_combined_pdf_path_requested.connect(
+            self._choose_combined_pdf_path
+        )
+        self._export_binder.export_complete.connect(self._show_export_complete)
+        self._export_binder.export_failed.connect(self._show_export_failed)
 
     def _choose_images(self) -> None:
         filenames, _ = QFileDialog.getOpenFileNames(
@@ -151,249 +170,104 @@ class ScannerWindow(QMainWindow):
         )
         self.add_images([Path(filename) for filename in filenames])
 
-    def _select_index(self, index: int) -> None:
-        if index < 0 or index >= len(self._items):
-            self._current_index = -1
-            self._stack.setCurrentWidget(self._empty_page)
-            return
-        self._current_index = index
-        item = self._items[index]
-        self._adjust_page.set_image(item.original_rgb)
-        self._adjust_page.set_polygon(item.corners)
-        self._preview_page.set_selected_filters(self._selected_filters)
-        self._preview_image = None
-        self._stack.setCurrentWidget(self._adjust_page)
-
-    def _current_item(self) -> ImageItem | None:
-        if self._current_index < 0 or self._current_index >= len(self._items):
-            return None
-        return self._items[self._current_index]
-
-    def _set_current_polygon(self, polygon: PointArray) -> None:
-        item = self._current_item()
-        if item is None:
-            return
-        item.corners = polygon.copy()
-        item.warped_rgb = None
-
     def _reset_corners(self) -> None:
-        item = self._current_item()
-        if item is None:
-            return
-        item.corners = item.detected_corners.copy()
-        item.warped_rgb = None
-        self._adjust_page.set_polygon(item.corners)
+        self._edit_controller.reset_current_corners()
+        self._adjust_binder.refresh_from_current_item()
 
-    def _show_adjustment(self) -> None:
-        item = self._current_item()
-        if item is None:
-            return
-        self._adjust_page.set_image(item.original_rgb)
-        self._adjust_page.set_polygon(item.corners)
-        self._stack.setCurrentWidget(self._adjust_page)
+    def _save_current(self) -> None:
+        if self._stack.currentWidget() != self._preview_page:
+            if not self._prepare_and_show_preview():
+                return
+        self._preview_binder.save_current()
 
-    def _show_preview(self) -> None:
-        item = self._current_item()
-        if item is None:
-            return
-        try:
-            item.corners = order_points(item.corners)
-            item.warped_rgb = warp_perspective(item.original_rgb, item.corners)
-        except Exception as exc:
-            item.status = ItemStatus.FAILED
-            item.error = str(exc)
-            self._refresh_list_item(self._current_index)
-            QMessageBox.warning(
-                self, "Preview Failed", f"Could not warp document region.\n\n{exc}"
-            )
-            return
-        item.status = ItemStatus.PREVIEWED
-        self._refresh_list_item(self._current_index)
-        self._stack.setCurrentWidget(self._preview_page)
-        self._preview_page.set_save_actions_for_last_item(
-            self._current_index == len(self._items) - 1
-        )
-        self._apply_current_filter()
-
-    def _filters_changed(self, filters: set[ScanFilter]) -> None:
-        self._selected_filters = filters
-        if self._stack.currentWidget() == self._preview_page:
-            self._apply_current_filter()
-
-    def _apply_current_filter(self) -> None:
-        item = self._current_item()
-        if item is None:
-            return
-        try:
-            if item.warped_rgb is None:
-                item.warped_rgb = warp_perspective(item.original_rgb, item.corners)
-            filtered_rgb = apply_filters(item.warped_rgb, self._selected_filters)
-            self._preview_image = self._rotate_image(filtered_rgb, item.rotation_turns)
-        except Exception as exc:
-            item.status = ItemStatus.FAILED
-            item.error = str(exc)
-            self._refresh_list_item(self._current_index)
-            QMessageBox.warning(self, "Filter Failed", str(exc))
-            return
-        self._preview_page.set_preview_image(self._preview_image)
-
-    def _rotate_current(self, turns_delta: int) -> None:
-        item = self._current_item()
-        if item is None:
-            return
-        item.rotation_turns = (item.rotation_turns + turns_delta) % 4
-        self._preview_image = None
-        self._apply_current_filter()
-
-    def _rotate_image(self, image_rgb: ImageArray, clockwise_turns: int) -> ImageArray:
-        turns = clockwise_turns % 4
-        if turns == 0:
-            return image_rgb
-        return np.ascontiguousarray(np.rot90(image_rgb, k=-turns))
-
-    def _save_current(self) -> bool:
-        if self._preview_image is None:
-            self._show_preview()
-        if self._preview_image is None:
+    def _prepare_and_show_preview(self) -> bool:
+        result = self._edit_controller.prepare_current_preview()
+        if not result.ok:
+            self._show_preview_failed(result.error or "Could not warp document region.")
             return False
-        item = self._current_item()
-        if item is None:
-            return False
-        item.saved_rgb = self._preview_image.copy()
-        item.status = ItemStatus.SAVED
-        self._refresh_list_item(self._current_index)
+        self._show_preview_page()
         return True
 
-    def _save_and_next(self) -> None:
-        if self._save_current():
-            self._select_next_pending()
+    def _show_selected_index(self, index: int) -> None:
+        if index < 0:
+            self._stack.setCurrentWidget(self._empty_page)
+            return
+        self._show_adjustment()
 
-    def _save_and_show_export(self) -> None:
-        if self._save_current():
-            self._show_export_page()
+    def _show_adjustment(self) -> None:
+        if self._store.current_item() is None:
+            self._stack.setCurrentWidget(self._empty_page)
+            return
+        self._adjust_binder.refresh_from_current_item()
+        self._stack.setCurrentWidget(self._adjust_page)
 
-    def _select_next_pending(self) -> None:
-        for index in range(self._current_index + 1, len(self._items)):
-            if self._items[index].status != ItemStatus.SAVED:
-                self._list.setCurrentRow(index)
-                return
-        if self._current_index + 1 < len(self._items):
-            self._list.setCurrentRow(self._current_index + 1)
+    def _show_preview_page(self) -> None:
+        self._stack.setCurrentWidget(self._preview_page)
+        self._preview_binder.refresh_action_visibility()
+        self._preview_binder.refresh_preview()
+
+    def _select_next_index(self, index: int) -> None:
+        self._store.set_current_index(index)
+        self._show_adjustment()
 
     def _show_current_or_first_image(self) -> None:
-        if self._current_index >= 0:
+        if self._store.current_index() >= 0:
             self._show_adjustment()
-        elif self._items:
-            self._list.setCurrentRow(0)
-        else:
-            self._stack.setCurrentWidget(self._empty_page)
+            return
+        if self._store.items():
+            self._store.set_current_index(0)
+            return
+        self._stack.setCurrentWidget(self._empty_page)
 
     def _show_export_page(self) -> None:
-        self._export_page.set_items(self._items)
-        if self._export_page.count() == 0:
+        self._export_binder.sync_saved_items()
+        if not self._export_binder.has_saved_items():
             QMessageBox.information(
-                self, "Nothing To Export", "Save at least one page before exporting."
+                self,
+                "Nothing To Export",
+                "Save at least one page before exporting.",
             )
             return
         self._stack.setCurrentWidget(self._export_page)
 
-    def _export_images(self) -> None:
-        items = self._export_page.ordered_items(self._items)
-        if not items:
-            QMessageBox.information(
-                self, "Nothing To Export", "Save at least one page before exporting."
-            )
-            return
+    def _choose_export_image_directory(self) -> None:
         directory = QFileDialog.getExistingDirectory(self, "Export Images")
-        if not directory:
-            return
-        try:
-            for item in items:
-                assert item.saved_rgb is not None
-                write_image(
-                    Path(directory) / f"{item.path.stem}-scan.png", item.saved_rgb
-                )
-            QMessageBox.information(
-                self, "Export Complete", f"Exported {len(items)} image file(s)."
-            )
-        except Exception as exc:
-            QMessageBox.warning(self, "Export Failed", str(exc))
+        if directory:
+            self._export_binder.export_images_to(Path(directory))
 
-    def _export_pdfs(self) -> None:
-        items = self._export_page.ordered_items(self._items)
-        if not items:
-            QMessageBox.information(
-                self, "Nothing To Export", "Save at least one page before exporting."
-            )
-            return
+    def _choose_export_pdf_directory(self) -> None:
         directory = QFileDialog.getExistingDirectory(self, "Export PDFs")
-        if not directory:
-            return
-        try:
-            layout = self._resolve_current_pdf_layout(items)
-            for item in items:
-                assert item.saved_rgb is not None
-                write_pdf(
-                    Path(directory) / f"{item.path.stem}-scan.pdf",
-                    item.saved_rgb,
-                    layout,
-                )
-            QMessageBox.information(
-                self, "Export Complete", f"Exported {len(items)} PDF file(s)."
-            )
-        except Exception as exc:
-            QMessageBox.warning(self, "Export Failed", str(exc))
+        if directory:
+            self._export_binder.export_pdfs_to(Path(directory))
 
-    def _export_combined_pdf(self) -> None:
-        items = self._export_page.ordered_items(self._items)
-        if not items:
-            QMessageBox.information(
-                self, "Nothing To Export", "Save at least one page before exporting."
-            )
-            return
-        first_path = items[0].path.with_name(f"{items[0].path.stem}-combined-scan.pdf")
+    def _choose_combined_pdf_path(self) -> None:
+        stem = self._export_binder.first_output_stem()
+        directory = self._export_binder.first_output_directory()
+        first_path = directory / f"{stem}-combined-scan.pdf"
         filename, _ = QFileDialog.getSaveFileName(
             self,
             "Export Combined PDF",
             str(first_path),
             "PDF File (*.pdf)",
         )
-        if not filename:
-            return
-        try:
-            images: list[ImageArray] = []
-            for item in items:
-                if item.saved_rgb is not None:
-                    images.append(item.saved_rgb)
-            layout = self._resolve_current_pdf_layout(items)
-            write_combined_pdf(Path(filename), images, layout)
-            QMessageBox.information(
-                self, "Export Complete", f"Exported {len(images)} page PDF."
-            )
-        except Exception as exc:
-            QMessageBox.warning(self, "Export Failed", str(exc))
+        if filename:
+            self._export_binder.export_combined_pdf_to(Path(filename))
 
-    def _resolve_current_pdf_layout(self, items: list[ImageItem]) -> PdfPageLayout:
-        first_saved = next(
-            (item.saved_rgb for item in items if item.saved_rgb is not None),
-            None,
-        )
-        if first_saved is None:
-            raise ValueError("Cannot export a PDF without saved pages.")
-        return resolve_pdf_page_layout(
-            self._export_page.pdf_page_size_option,
-            first_saved,
+    def _show_preview_failed(self, message: str) -> None:
+        QMessageBox.warning(
+            self,
+            "Preview Failed",
+            f"Could not warp document region.\n\n{message}",
         )
 
-    def _format_list_item(self, item: ImageItem) -> QListWidgetItem:
-        widget_item = QListWidgetItem(f"{item.display_name} [{item.status}]")
-        widget_item.setToolTip(str(item.path))
-        return widget_item
+    def _show_save_failed(self, message: str) -> None:
+        QMessageBox.warning(self, "Save Failed", message)
 
-    def _refresh_list_item(self, index: int) -> None:
-        if index < 0 or index >= len(self._items):
-            return
-        list_item = self._list.item(index)
-        item = self._items[index]
-        list_item.setText(f"{item.display_name} [{item.status}]")
-        list_item.setToolTip(str(item.path))
+    def _show_preview_operation_failed(self, message: str) -> None:
+        QMessageBox.warning(self, "Preview Failed", message)
+
+    def _show_export_complete(self, message: str) -> None:
+        QMessageBox.information(self, "Export Complete", message)
+
+    def _show_export_failed(self, message: str) -> None:
+        QMessageBox.warning(self, "Export Failed", message)
