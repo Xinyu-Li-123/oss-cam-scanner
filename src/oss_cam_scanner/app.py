@@ -227,9 +227,9 @@ class ScannerWindow(QMainWindow):
 
         language_combo = QComboBox(dialog)
         language_combo.addItem(self.tr("Use System Language"), LANGUAGE_SYSTEM)
-        language_combo.addItem(self.tr("English"), LANGUAGE_ENGLISH)
+        language_combo.addItem("English", LANGUAGE_ENGLISH)
         language_combo.addItem(
-            self.tr("Simplified Chinese"),
+            "简体中文",
             LANGUAGE_SIMPLIFIED_CHINESE,
         )
         current_index = language_combo.findData(

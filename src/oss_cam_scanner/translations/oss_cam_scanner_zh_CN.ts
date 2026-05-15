@@ -304,14 +304,6 @@
         <translation>使用系统语言</translation>
     </message>
     <message>
-        <source>English</source>
-        <translation>英语</translation>
-    </message>
-    <message>
-        <source>Simplified Chinese</source>
-        <translation>简体中文</translation>
-    </message>
-    <message>
         <source>Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)</source>
         <translation>图像 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;所有文件 (*)</translation>
     </message>
