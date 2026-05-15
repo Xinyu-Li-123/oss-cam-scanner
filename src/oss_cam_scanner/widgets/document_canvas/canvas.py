@@ -29,6 +29,8 @@ class DocumentCanvas(QWidget):
         return QSize(900, 650)
 
     def set_image(self, image_rgb: ImageArray) -> None:
+        if image_rgb is self._image:
+            return
         self._image = image_rgb
         self._qimage = image_to_qimage(image_rgb)
         self._drag_index = None
@@ -37,7 +39,16 @@ class DocumentCanvas(QWidget):
         self.update()
 
     def set_polygon(self, polygon: PointArray) -> None:
-        self._polygon = np.asarray(polygon, dtype=np.float32).reshape(4, 2).copy()
+        new_polygon = np.asarray(polygon, dtype=np.float32).reshape(4, 2).copy()
+        if (
+            self._drag_index is not None
+            and self._polygon is not None
+            and np.array_equal(new_polygon, self._polygon)
+        ):
+            self._polygon = new_polygon
+            self.update()
+            return
+        self._polygon = new_polygon
         self._drag_index = None
         self._magnifier.hide()
         self.update()
