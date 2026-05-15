@@ -2,6 +2,20 @@
 
 A desktop document scanner for photos. It finds the document region, lets you adjust the four corners, applies scan-style filters, and exports the result as images or PDFs.
 
+## Example Usage
+
+Upload multiple images, and adjust region interactively
+
+![](./res/demo-adjust-page.png)
+
+Apply filters, rotate image, and more
+
+![](./res/demo-preview-page.png)
+
+Export multiple images as separate image, pdf, or combined pdf.
+
+![](./res/demo-export-page.png)
+
 ## Install
 
 ```bash
