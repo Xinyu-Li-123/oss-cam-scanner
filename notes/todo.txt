@@ -6,8 +6,6 @@
 
 ## Features
 
-- [ ] Allow adjusting the polygon not just by corner but also by edges (not sure how that work)
-
 - [ ] Allow adjusting the level of conservation of polygon recognition, so we can make it more aggressive if it's too conservative now.
 
 - [ ] Need better filters
@@ -33,6 +31,10 @@
 - [v] Toolbar need improvement. We use a dropdown menu
 
 - [v] When dragging corner to adjust ploygon, show a magnified view of the region around the corner for precise selection
+
+- [x] Allow adjusting the polygon not just by corner but also by edges
+
+  not sure how that work, and doesn't seem as useful as corner dragging
 
 ## Performance
 
