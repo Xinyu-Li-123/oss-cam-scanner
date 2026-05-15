@@ -1,0 +1,5 @@
+First ./update.sh to collect all texts to be localized
+
+Next ./review.sh for human reviewer to translate text
+
+Finally ./release.sh to update the app

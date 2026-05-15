@@ -164,7 +164,7 @@ class ScannerWindow(QMainWindow):
         file_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar.addWidget(file_button)
 
-        preference_menu = QMenu(self.tr("Preference"), self)
+        preference_menu = QMenu(self.tr("Setting"), self)
         apply_filters_action = QAction(
             self.tr("Apply First Saved Filters To All Pages"),
             self,
@@ -183,7 +183,7 @@ class ScannerWindow(QMainWindow):
         preference_menu.addAction(language_action)
 
         preference_button = QToolButton(self)
-        preference_button.setText(self.tr("Preference"))
+        preference_button.setText(self.tr("Setting"))
         preference_button.setMenu(preference_menu)
         preference_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar.addWidget(preference_button)
@@ -254,8 +254,7 @@ class ScannerWindow(QMainWindow):
         layout.addRow(self.tr("Language"), language_combo)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok
-            | QDialogButtonBox.StandardButton.Cancel,
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             dialog,
         )
         buttons.accepted.connect(dialog.accept)
