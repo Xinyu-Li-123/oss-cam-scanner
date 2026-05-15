@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import ExitStack
 from importlib import resources
 
-from PySide6.QtCore import QLocale, QSettings, QTranslator
+from PySide6.QtCore import QCoreApplication, QLocale, QSettings, QTranslator
 from PySide6.QtWidgets import QApplication
 
 APP_ORGANIZATION = "oss-cam-scanner"
@@ -29,17 +29,20 @@ class TranslationManager:
         self._app = app
         self._locale = locale or QLocale.system()
         self._language_preference = normalize_language_preference(language_preference)
+        self._locale_name = app_translation_locale(
+            self._locale,
+            self._language_preference,
+        )
         self._resource_stack = ExitStack()
         self._translators: list[QTranslator] = []
 
     def install(self) -> None:
-        locale_name = app_translation_locale(
-            self._locale,
-            self._language_preference,
-        )
-        if locale_name == LANGUAGE_ENGLISH:
+        if self._locale_name == LANGUAGE_ENGLISH:
             return
-        self._install_qm(f"oss_cam_scanner_{locale_name}.qm")
+        self._install_qm(f"oss_cam_scanner_{self._locale_name}.qm")
+
+    def locale_name(self) -> str:
+        return self._locale_name
 
     def close(self) -> None:
         for translator in self._translators:
@@ -89,6 +92,14 @@ def language_preference_from_settings(settings: QSettings) -> str:
             type=str,
         )
     )
+
+
+def active_translation_locale() -> str:
+    app = QCoreApplication.instance()
+    manager = getattr(app, "_oss_cam_scanner_translation_manager", None)
+    if isinstance(manager, TranslationManager):
+        return manager.locale_name()
+    return app_translation_locale()
 
 
 def install_translations(

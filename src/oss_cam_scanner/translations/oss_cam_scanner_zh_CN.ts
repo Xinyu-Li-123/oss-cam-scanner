@@ -288,6 +288,14 @@
         <translation>偏好设置</translation>
     </message>
     <message>
+        <source>Help</source>
+        <translation>帮助</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>关于</translation>
+    </message>
+    <message>
         <source>Apply First Saved Filters To All Pages</source>
         <translation>将首次保存的滤镜应用到所有页面</translation>
     </message>
@@ -362,6 +370,14 @@
     <message>
         <source>The language change will be applied the next time you start the app.</source>
         <translation>语言更改将在下次启动应用时生效。</translation>
+    </message>
+    <message>
+        <source>Could not load about text.
+
+{message}</source>
+        <translation>无法加载关于文本。
+
+{message}</translation>
     </message>
 </context>
 </TS>

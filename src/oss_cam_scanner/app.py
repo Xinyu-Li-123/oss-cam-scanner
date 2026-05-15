@@ -15,8 +15,10 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QStackedWidget,
+    QTextBrowser,
     QToolBar,
     QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -32,6 +34,7 @@ from oss_cam_scanner.controllers import (
     ImportController,
     PreviewController,
 )
+from oss_cam_scanner.documents import load_localized_markdown
 from oss_cam_scanner.i18n import (
     APP_NAME,
     APP_ORGANIZATION,
@@ -185,6 +188,17 @@ class ScannerWindow(QMainWindow):
         preference_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar.addWidget(preference_button)
 
+        help_menu = QMenu(self.tr("Help"), self)
+        about_action = QAction(self.tr("About"), self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
+
+        help_button = QToolButton(self)
+        help_button.setText(self.tr("Help"))
+        help_button.setMenu(help_menu)
+        help_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        toolbar.addWidget(help_button)
+
     def _connect_app_level_signals(self) -> None:
         self._empty_page.open_images_requested.connect(self._choose_images)
         self._store.current_index_changed.connect(self._show_selected_index)
@@ -255,6 +269,35 @@ class ScannerWindow(QMainWindow):
         self._preference_state.set_language_preference(str(selected_language))
         if self._preference_state.language_preference() != old_language:
             self._show_language_restart_required()
+
+    def _show_about(self) -> None:
+        try:
+            about_text = load_localized_markdown("toolbar/help/about.md")
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                self.tr("About"),
+                self.tr("Could not load about text.\n\n{message}").format(
+                    message=str(exc),
+                ),
+            )
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.tr("About"))
+        dialog.resize(640, 480)
+
+        layout = QVBoxLayout(dialog)
+        text_browser = QTextBrowser(dialog)
+        text_browser.setOpenExternalLinks(True)
+        text_browser.setMarkdown(about_text)
+        layout.addWidget(text_browser)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok, dialog)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+
+        dialog.exec()
 
     def _show_selected_index(self, index: int) -> None:
         if index < 0:
