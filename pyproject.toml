@@ -25,6 +25,9 @@ packages = ["src/oss_cam_scanner"]
 "src/oss_cam_scanner/resources" = "oss_cam_scanner/resources"
 "src/oss_cam_scanner/translations" = "oss_cam_scanner/translations"
 
+[tool.pyright]
+reportMatchNotExhaustive = "error"
+
 [dependency-groups]
 dev = [
     "pyside6-stubs>=6.7.3.0",

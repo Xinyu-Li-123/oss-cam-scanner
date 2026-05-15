@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
+from enum import StrEnum
 from importlib import resources
 
 from PySide6.QtCore import QCoreApplication, QLocale, QSettings, QTranslator
@@ -8,15 +9,13 @@ from PySide6.QtWidgets import QApplication
 
 APP_ORGANIZATION = "oss-cam-scanner"
 APP_NAME = "oss-cam-scanner"
-LANGUAGE_SYSTEM = "system"
-LANGUAGE_ENGLISH = "en"
-LANGUAGE_SIMPLIFIED_CHINESE = "zh_CN"
 LANGUAGE_SETTING_KEY = "ui/language"
-SUPPORTED_LANGUAGE_PREFERENCES = (
-    LANGUAGE_SYSTEM,
-    LANGUAGE_ENGLISH,
-    LANGUAGE_SIMPLIFIED_CHINESE,
-)
+
+
+class Language(StrEnum):
+    SYSTEM = "system"
+    EN = "en"
+    ZH_CN = "zh_CN"
 
 
 class TranslationManager:
@@ -24,7 +23,7 @@ class TranslationManager:
         self,
         app: QApplication,
         locale: QLocale | None = None,
-        language_preference: str = LANGUAGE_SYSTEM,
+        language_preference: Language | str = Language.SYSTEM,
     ) -> None:
         self._app = app
         self._locale = locale or QLocale.system()
@@ -37,11 +36,15 @@ class TranslationManager:
         self._translators: list[QTranslator] = []
 
     def install(self) -> None:
-        if self._locale_name == LANGUAGE_ENGLISH:
-            return
-        self._install_qm(f"oss_cam_scanner_{self._locale_name}.qm")
+        match self._locale_name:
+            case Language.EN:
+                return
+            case Language.ZH_CN:
+                self._install_qm(f"oss_cam_scanner_{self._locale_name.value}.qm")
+            case Language.SYSTEM:
+                return
 
-    def locale_name(self) -> str:
+    def locale_name(self) -> Language:
         return self._locale_name
 
     def close(self) -> None:
@@ -67,40 +70,63 @@ class TranslationManager:
 
 def app_translation_locale(
     locale: QLocale | None = None,
-    language_preference: str = LANGUAGE_SYSTEM,
-) -> str:
+    language_preference: Language | str = Language.SYSTEM,
+) -> Language:
     preference = normalize_language_preference(language_preference)
-    if preference != LANGUAGE_SYSTEM:
-        return preference
-    active_locale = locale or QLocale.system()
-    if active_locale.language() == QLocale.Language.Chinese:
-        return LANGUAGE_SIMPLIFIED_CHINESE
-    return LANGUAGE_ENGLISH
+    match preference:
+        case Language.EN:
+            return Language.EN
+        case Language.ZH_CN:
+            return Language.ZH_CN
+        case Language.SYSTEM:
+            active_locale = locale or QLocale.system()
+            if active_locale.language() == QLocale.Language.Chinese:
+                return Language.ZH_CN
+            return Language.EN
 
 
 def system_language_preference_label(locale: QLocale | None = None) -> str:
-    if app_translation_locale(locale) == LANGUAGE_SIMPLIFIED_CHINESE:
-        return "使用系统语言"
-    return "Use System Language"
+    match app_translation_locale(locale):
+        case Language.EN:
+            return "Use System Language"
+        case Language.ZH_CN:
+            return "使用系统语言"
+        case Language.SYSTEM:
+            return "Use System Language"
 
 
-def normalize_language_preference(value: object) -> str:
-    if isinstance(value, str) and value in SUPPORTED_LANGUAGE_PREFERENCES:
+def native_language_label(language: Language) -> str:
+    match language:
+        case Language.EN:
+            return "English"
+        case Language.ZH_CN:
+            return "简体中文"
+        case Language.SYSTEM:
+            return system_language_preference_label()
+
+
+def normalize_language_preference(value: object) -> Language:
+    if isinstance(value, Language):
         return value
-    return LANGUAGE_SYSTEM
+    if isinstance(value, str):
+        try:
+            return Language(value)
+        except ValueError:
+            return Language.SYSTEM
+    return Language.SYSTEM
 
 
-def language_preference_from_settings(settings: QSettings) -> str:
+def language_preference_from_settings(settings: QSettings) -> Language:
     return normalize_language_preference(
         settings.value(
             LANGUAGE_SETTING_KEY,
-            LANGUAGE_SYSTEM,
+            Language.SYSTEM.value,
             type=str,
         )
     )
 
 
-def active_translation_locale() -> str:
+def active_translation_locale() -> Language:
     app = QCoreApplication.instance()
     manager = getattr(app, "_oss_cam_scanner_translation_manager", None)
     if isinstance(manager, TranslationManager):
@@ -111,7 +137,7 @@ def active_translation_locale() -> str:
 def install_translations(
     app: QApplication,
     locale: QLocale | None = None,
-    language_preference: str = LANGUAGE_SYSTEM,
+    language_preference: Language | str = Language.SYSTEM,
 ) -> TranslationManager:
     manager = TranslationManager(app, locale, language_preference)
     manager.install()

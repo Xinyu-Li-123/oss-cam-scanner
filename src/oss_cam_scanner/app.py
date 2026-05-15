@@ -38,9 +38,8 @@ from oss_cam_scanner.documents import load_localized_markdown
 from oss_cam_scanner.i18n import (
     APP_NAME,
     APP_ORGANIZATION,
-    LANGUAGE_ENGLISH,
-    LANGUAGE_SIMPLIFIED_CHINESE,
-    LANGUAGE_SYSTEM,
+    Language,
+    native_language_label,
     system_language_preference_label,
 )
 from oss_cam_scanner.stores import (
@@ -241,11 +240,11 @@ class ScannerWindow(QMainWindow):
         layout = QFormLayout(dialog)
 
         language_combo = QComboBox(dialog)
-        language_combo.addItem(system_language_preference_label(), LANGUAGE_SYSTEM)
-        language_combo.addItem("English", LANGUAGE_ENGLISH)
+        language_combo.addItem(system_language_preference_label(), Language.SYSTEM)
+        language_combo.addItem(native_language_label(Language.EN), Language.EN)
         language_combo.addItem(
-            "简体中文",
-            LANGUAGE_SIMPLIFIED_CHINESE,
+            native_language_label(Language.ZH_CN),
+            Language.ZH_CN,
         )
         current_index = language_combo.findData(
             self._preference_state.language_preference()
@@ -267,7 +266,7 @@ class ScannerWindow(QMainWindow):
             return
         selected_language = language_combo.currentData()
         old_language = self._preference_state.language_preference()
-        self._preference_state.set_language_preference(str(selected_language))
+        self._preference_state.set_language_preference(selected_language)
         if self._preference_state.language_preference() != old_language:
             self._show_language_restart_required()
 

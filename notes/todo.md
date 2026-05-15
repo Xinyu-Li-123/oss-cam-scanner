@@ -1,0 +1,51 @@
+## Bug
+
+- [ ] Save and export is clickable even if there is unsaved image in the middle. E.g. we can just jump to last image, apply filter, and save and export.
+
+- [ ] Order of image saving should not affect order of exporting. If I save 3rd uploaded image first, then 1st uploaded image, then 2nd uploaded image, the export should still be in the order of image upload.
+
+## Features
+
+- [ ] Need better filters
+
+  - [ ] Allow tuning the brightness and contrast of the image with two sliders
+
+  - [ ] Try to replicate CamScanner's effect
+
+- [ ] Wanna zoom in / out and pan image in preview mode, so we can check the image details after applying filter
+
+- [ ] Use a better region detection algorithm
+
+- [ ] Allow adjusting the level of conservation of polygon recognition, so we can make it more aggressive if it's too conservative now.
+
+- [ ] Use icon instead of text for UI
+
+- [ ] Allow clear all images, so we can reselect images, or work on next set of images after exporting prev ones
+
+- [x] Refactor the app per [this discussion w/ ChatGPT](https://chatgpt.com/g/g-p-6a04863136fc8191b04691a76d9efc3a-oss-cam-scanner/c/6a052af5-f8fc-83ea-a9cd-0203bf05ec0f). We want to create a thin app state, and multiple controllers over the states, and let pages only interact w/ controllers.
+
+- [x] Store the selected filter of each image in ImageItem. if this field is none, set it to the globally selected filter, if not (i.e. users have selected a filter), use the existing ones
+
+- [x] When clicking on a saved image, we should go to the preview page with currently selected filter, with an option to adjust region (and apply the same filter), instead of just go to the page where we adjust the region
+
+- [x] Toolbar need improvement. We use a dropdown menu
+
+- [x] When dragging corner to adjust ploygon, show a magnified view of the region around the corner for precise selection
+
+- [x] Need internationalization
+
+## Performance
+
+- [ ] No shadow is too slow
+
+## Maintenance
+
+- [ ] Add automated tests
+
+## Nope
+
+Todo items we either don't know how to implement, or don't wanna implement.
+
+- Allow adjusting the polygon not just by corner but also by edges
+
+  not sure how that work, and doesn't seem as useful as corner dragging
