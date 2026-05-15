@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QWidget
 
 from oss_cam_scanner.core.io import image_to_qimage
 from oss_cam_scanner.models import ImageArray, PointArray
+from .magnifier import _MagnifierWidget
 
 
 class DocumentCanvas(QWidget):
@@ -21,6 +22,8 @@ class DocumentCanvas(QWidget):
         self._polygon: PointArray | None = None
         self._drag_index: int | None = None
         self._image_rect = QRectF()
+        self._magnifier = _MagnifierWidget(self)
+        self._magnifier.hide()
 
     def sizeHint(self) -> QSize:
         return QSize(900, 650)
@@ -28,10 +31,15 @@ class DocumentCanvas(QWidget):
     def set_image(self, image_rgb: ImageArray) -> None:
         self._image = image_rgb
         self._qimage = image_to_qimage(image_rgb)
+        self._drag_index = None
+        self._magnifier.set_image(self._qimage)
+        self._magnifier.hide()
         self.update()
 
     def set_polygon(self, polygon: PointArray) -> None:
         self._polygon = np.asarray(polygon, dtype=np.float32).reshape(4, 2).copy()
+        self._drag_index = None
+        self._magnifier.hide()
         self.update()
 
     def polygon(self) -> PointArray | None:
@@ -59,6 +67,9 @@ class DocumentCanvas(QWidget):
         if index is not None:
             self._drag_index = index
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            self._update_magnifier(self._polygon[index])
+            self._magnifier.raise_()
+            self._magnifier.show()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if self._polygon is None:
@@ -77,12 +88,14 @@ class DocumentCanvas(QWidget):
         point[0] = np.clip(point[0], 0, width - 1)
         point[1] = np.clip(point[1], 0, height - 1)
         self._polygon[self._drag_index] = point
+        self._update_magnifier(point)
         self.polygon_changed.emit(self._polygon.copy())
         self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_index = None
+            self._magnifier.hide()
             self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def _draw_polygon(self, painter: QPainter) -> None:
@@ -131,3 +144,22 @@ class DocumentCanvas(QWidget):
             if (widget_point - point).manhattanLength() <= 18:
                 return index
         return None
+
+    def _update_magnifier(self, image_point: np.ndarray) -> None:
+        self._magnifier.set_center(QPointF(float(image_point[0]), float(image_point[1])))
+        widget_point = self._image_to_widget(image_point)
+        self._move_magnifier_near(widget_point)
+
+    def _move_magnifier_near(self, point: QPointF) -> None:
+        offset = 24
+        width = self._magnifier.width()
+        height = self._magnifier.height()
+        x = int(point.x()) + offset
+        y = int(point.y()) + offset
+        if x + width > self.width():
+            x = int(point.x()) - width - offset
+        if y + height > self.height():
+            y = int(point.y()) - height - offset
+        x = max(0, min(x, self.width() - width))
+        y = max(0, min(y, self.height() - height))
+        self._magnifier.move(x, y)
