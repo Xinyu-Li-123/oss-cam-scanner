@@ -6,6 +6,10 @@
 
 ## Features
 
+- [ ] Wanna zoom in / out and pan image in preview mode, so we can check the image details after applying filter
+
+- [ ] Use a better region detection algorithm
+
 - [ ] Allow adjusting the level of conservation of polygon recognition, so we can make it more aggressive if it's too conservative now.
 
 - [ ] Need better filters
@@ -16,11 +20,7 @@
 
 - [ ] Use icon instead of text for UI
 
-- [ ] Wanna zoom in / out and pan image in preview mode, so we can check the image details after applying filter
-
 - [ ] Allow clear all images, so we can reselect images, or work on next set of images after exporting prev ones
-
-- [ ] Need internationalization
 
 - [v] Refactor the app per [this discussion w/ ChatGPT](https://chatgpt.com/g/g-p-6a04863136fc8191b04691a76d9efc3a-oss-cam-scanner/c/6a052af5-f8fc-83ea-a9cd-0203bf05ec0f). We want to create a thin app state, and multiple controllers over the states, and let pages only interact w/ controllers.
 
@@ -35,6 +35,8 @@
 - [x] Allow adjusting the polygon not just by corner but also by edges
 
   not sure how that work, and doesn't seem as useful as corner dragging
+
+- [v] Need internationalization
 
 ## Performance
 

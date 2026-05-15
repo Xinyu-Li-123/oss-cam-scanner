@@ -41,6 +41,7 @@ from oss_cam_scanner.i18n import (
     LANGUAGE_ENGLISH,
     LANGUAGE_SIMPLIFIED_CHINESE,
     LANGUAGE_SYSTEM,
+    system_language_preference_label,
 )
 from oss_cam_scanner.stores import (
     DocumentStore,
@@ -240,7 +241,7 @@ class ScannerWindow(QMainWindow):
         layout = QFormLayout(dialog)
 
         language_combo = QComboBox(dialog)
-        language_combo.addItem(self.tr("Use System Language"), LANGUAGE_SYSTEM)
+        language_combo.addItem(system_language_preference_label(), LANGUAGE_SYSTEM)
         language_combo.addItem("English", LANGUAGE_ENGLISH)
         language_combo.addItem(
             "简体中文",

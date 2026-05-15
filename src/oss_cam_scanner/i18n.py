@@ -78,6 +78,12 @@ def app_translation_locale(
     return LANGUAGE_ENGLISH
 
 
+def system_language_preference_label(locale: QLocale | None = None) -> str:
+    if app_translation_locale(locale) == LANGUAGE_SIMPLIFIED_CHINESE:
+        return "使用系统语言"
+    return "Use System Language"
+
+
 def normalize_language_preference(value: object) -> str:
     if isinstance(value, str) and value in SUPPORTED_LANGUAGE_PREFERENCES:
         return value
