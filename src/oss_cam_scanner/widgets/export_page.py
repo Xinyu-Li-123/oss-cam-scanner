@@ -14,7 +14,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from oss_cam_scanner.core.io import PdfPageSizeOption, image_to_pixmap
+from oss_cam_scanner.core.io import (
+    PdfPageSizeOption,
+    image_to_pixmap,
+    pdf_page_size_option_label,
+)
 from oss_cam_scanner.models import ImageItem
 
 
@@ -31,7 +35,7 @@ class ExportPage(QWidget):
         super().__init__(parent)
 
         layout = QVBoxLayout(self)
-        header = QLabel("Saved Pages")
+        header = QLabel(self.tr("Saved Pages"))
         header.setStyleSheet("font-size: 18px; font-weight: 600;")
         layout.addWidget(header)
 
@@ -39,24 +43,27 @@ class ExportPage(QWidget):
         self._export_list.setIconSize(QSize(96, 128))
         layout.addWidget(self._export_list, 1)
 
-        pdf_options = QGroupBox("PDF Page Size")
+        pdf_options = QGroupBox(self.tr("PDF Page Size"))
         pdf_options_layout = QHBoxLayout(pdf_options)
         self._pdf_page_size_combo = QComboBox()
         for option in PdfPageSizeOption:
-            self._pdf_page_size_combo.addItem(option.value, option)
+            self._pdf_page_size_combo.addItem(
+                pdf_page_size_option_label(option),
+                option,
+            )
         self._pdf_page_size_combo.currentIndexChanged.connect(self._emit_pdf_page_size)
-        self._pdf_page_size_label = QLabel("Auto selected: no saved pages")
+        self._pdf_page_size_label = QLabel(self.tr("Auto selected: no saved pages"))
         pdf_options_layout.addWidget(self._pdf_page_size_combo)
         pdf_options_layout.addWidget(self._pdf_page_size_label)
         pdf_options_layout.addStretch()
         layout.addWidget(pdf_options)
 
         order_actions = QHBoxLayout()
-        move_up_button = QPushButton("Move Up")
+        move_up_button = QPushButton(self.tr("Move Up"))
         move_up_button.clicked.connect(
             lambda _checked=False: self.move_up_requested.emit(self.current_row())
         )
-        move_down_button = QPushButton("Move Down")
+        move_down_button = QPushButton(self.tr("Move Down"))
         move_down_button.clicked.connect(
             lambda _checked=False: self.move_down_requested.emit(self.current_row())
         )
@@ -66,17 +73,17 @@ class ExportPage(QWidget):
         layout.addLayout(order_actions)
 
         export_actions = QHBoxLayout()
-        back_button = QPushButton("Back To Editing")
+        back_button = QPushButton(self.tr("Back To Editing"))
         back_button.clicked.connect(lambda _checked=False: self.back_requested.emit())
-        export_images_button = QPushButton("Export Separate Images")
+        export_images_button = QPushButton(self.tr("Export Separate Images"))
         export_images_button.clicked.connect(
             lambda _checked=False: self.export_images_requested.emit()
         )
-        export_pdfs_button = QPushButton("Export Separate PDFs")
+        export_pdfs_button = QPushButton(self.tr("Export Separate PDFs"))
         export_pdfs_button.clicked.connect(
             lambda _checked=False: self.export_pdfs_requested.emit()
         )
-        export_combined_button = QPushButton("Export Combined PDF")
+        export_combined_button = QPushButton(self.tr("Export Combined PDF"))
         export_combined_button.clicked.connect(
             lambda _checked=False: self.export_combined_pdf_requested.emit()
         )

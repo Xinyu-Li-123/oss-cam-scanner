@@ -4,6 +4,11 @@ from PySide6.QtCore import QObject, QSettings, Signal
 
 from oss_cam_scanner.core.filters import ScanFilter
 from oss_cam_scanner.core.io import PdfPageSizeOption
+from oss_cam_scanner.i18n import (
+    LANGUAGE_SETTING_KEY,
+    LANGUAGE_SYSTEM,
+    normalize_language_preference,
+)
 from oss_cam_scanner.models import ImageArray, ImageItem, ItemStatus, PointArray
 
 
@@ -183,6 +188,7 @@ class PreviewState(QObject):
 
 class PreferenceState(QObject):
     apply_first_saved_filters_to_all_pages_changed = Signal(bool)
+    language_preference_changed = Signal(str)
 
     def __init__(self, settings: QSettings, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -192,9 +198,19 @@ class PreferenceState(QObject):
             True,
             type=bool,
         )
+        self._language_preference = normalize_language_preference(
+            settings.value(
+                LANGUAGE_SETTING_KEY,
+                LANGUAGE_SYSTEM,
+                type=str,
+            )
+        )
 
     def apply_first_saved_filters_to_all_pages(self) -> bool:
         return self._apply_first_saved_filters_to_all_pages
+
+    def language_preference(self) -> str:
+        return self._language_preference
 
     def set_apply_first_saved_filters_to_all_pages(self, enabled: bool) -> None:
         if enabled == self._apply_first_saved_filters_to_all_pages:
@@ -205,6 +221,14 @@ class PreferenceState(QObject):
             enabled,
         )
         self.apply_first_saved_filters_to_all_pages_changed.emit(enabled)
+
+    def set_language_preference(self, language_preference: str) -> None:
+        normalized = normalize_language_preference(language_preference)
+        if normalized == self._language_preference:
+            return
+        self._language_preference = normalized
+        self._settings.setValue(LANGUAGE_SETTING_KEY, normalized)
+        self.language_preference_changed.emit(normalized)
 
 
 class ExportState(QObject):

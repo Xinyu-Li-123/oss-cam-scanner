@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from PySide6.QtCore import QCoreApplication
 
 from oss_cam_scanner.core.detection import detect_document
 from oss_cam_scanner.core.filters import ScanFilter, apply_filters
@@ -23,6 +24,10 @@ from oss_cam_scanner.stores import (
     PreferenceState,
     PreviewState,
 )
+
+
+def _tr(context: str, text: str) -> str:
+    return QCoreApplication.translate(context, text)
 
 
 @dataclass(slots=True)
@@ -121,7 +126,10 @@ class EditController:
         index = self._store.current_index()
         item = self._store.current_item()
         if item is None:
-            return EditPreviewResult(ok=False, error="No image is selected.")
+            return EditPreviewResult(
+                ok=False,
+                error=_tr("EditController", "No image is selected."),
+            )
         try:
             corners = order_points(item.corners)
             warped_rgb = warp_perspective(item.original_rgb, corners)
@@ -150,7 +158,10 @@ class PreviewController:
     def set_current_filters(self, filters: set[ScanFilter]) -> PreviewResult:
         index = self._store.current_index()
         if index < 0:
-            return PreviewResult(ok=False, error="No image is selected.")
+            return PreviewResult(
+                ok=False,
+                error=_tr("PreviewController", "No image is selected."),
+            )
         self._store.set_item_filters(index, filters)
         self._preview_state.clear_preview_image()
         return self.refresh_preview()
@@ -159,7 +170,10 @@ class PreviewController:
         index = self._store.current_index()
         item = self._store.current_item()
         if item is None:
-            return PreviewResult(ok=False, error="No image is selected.")
+            return PreviewResult(
+                ok=False,
+                error=_tr("PreviewController", "No image is selected."),
+            )
         try:
             warped_rgb = item.warped_rgb
             if warped_rgb is None:
@@ -181,9 +195,15 @@ class PreviewController:
         index = self._store.current_index()
         item = self._store.current_item()
         if item is None:
-            return PreviewResult(ok=False, error="No image is selected.")
+            return PreviewResult(
+                ok=False,
+                error=_tr("PreviewController", "No image is selected."),
+            )
         if item.saved_rgb is None:
-            return PreviewResult(ok=False, error="No saved preview exists.")
+            return PreviewResult(
+                ok=False,
+                error=_tr("PreviewController", "No saved preview exists."),
+            )
         self._store.set_item_filters(index, item.saved_filters)
         self._preview_state.set_preview_image(item.saved_rgb)
         return PreviewResult(ok=True, image=item.saved_rgb)
@@ -192,7 +212,10 @@ class PreviewController:
         index = self._store.current_index()
         item = self._store.current_item()
         if item is None:
-            return PreviewResult(ok=False, error="No image is selected.")
+            return PreviewResult(
+                ok=False,
+                error=_tr("PreviewController", "No image is selected."),
+            )
         self._store.set_item_rotation(index, item.rotation_turns + turns_delta)
         self._preview_state.clear_preview_image()
         return self.refresh_preview()
@@ -200,7 +223,10 @@ class PreviewController:
     def save_current(self) -> SaveResult:
         index = self._store.current_index()
         if self._store.current_item() is None:
-            return SaveResult(ok=False, error="No image is selected.")
+            return SaveResult(
+                ok=False,
+                error=_tr("PreviewController", "No image is selected."),
+            )
         preview_image = self._preview_state.preview_image()
         if preview_image is None:
             result = self.refresh_preview()
@@ -208,7 +234,11 @@ class PreviewController:
                 return SaveResult(ok=False, index=index, error=result.error)
             preview_image = result.image
         if preview_image is None:
-            return SaveResult(ok=False, index=index, error="No preview image exists.")
+            return SaveResult(
+                ok=False,
+                index=index,
+                error=_tr("PreviewController", "No preview image exists."),
+            )
         self._store.set_item_saved_image(index, preview_image.copy())
         item = self._store.item(index)
         if item is not None:
@@ -274,7 +304,9 @@ class ExportController:
             None,
         )
         if first_saved is None:
-            raise ValueError("Cannot export a PDF without saved pages.")
+            raise ValueError(
+                _tr("ExportController", "Cannot export a PDF without saved pages.")
+            )
         return resolve_pdf_page_layout(
             self._export_state.pdf_page_size_option(),
             first_saved,
@@ -285,7 +317,10 @@ class ExportController:
         if not items:
             return ExportResult(
                 ok=False,
-                error="Save at least one page before exporting.",
+                error=_tr(
+                    "ExportController",
+                    "Save at least one page before exporting.",
+                ),
             )
         try:
             for item in items:
@@ -300,7 +335,10 @@ class ExportController:
         if not items:
             return ExportResult(
                 ok=False,
-                error="Save at least one page before exporting.",
+                error=_tr(
+                    "ExportController",
+                    "Save at least one page before exporting.",
+                ),
             )
         try:
             layout = self.resolve_current_pdf_layout()
@@ -320,7 +358,10 @@ class ExportController:
         if not items:
             return ExportResult(
                 ok=False,
-                error="Save at least one page before exporting.",
+                error=_tr(
+                    "ExportController",
+                    "Save at least one page before exporting.",
+                ),
             )
         try:
             images = [item.saved_rgb for item in items if item.saved_rgb is not None]

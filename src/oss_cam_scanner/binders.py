@@ -9,7 +9,7 @@ from oss_cam_scanner.controllers import (
     ExportController,
     PreviewController,
 )
-from oss_cam_scanner.core.io import PdfPageSizeOption
+from oss_cam_scanner.core.io import PdfPageSizeOption, pdf_page_layout_label
 from oss_cam_scanner.models import ImageItem
 from oss_cam_scanner.stores import DocumentStore, ExportState, PreviewState
 from oss_cam_scanner.widgets.adjust_page import AdjustPage
@@ -88,7 +88,9 @@ class AdjustPageBinder(QObject):
         if result.ok:
             self.preview_ready.emit()
             return
-        self.preview_failed.emit(result.error or "Could not warp document region.")
+        self.preview_failed.emit(
+            result.error or self.tr("Could not warp document region.")
+        )
 
 
 class PreviewPageBinder(QObject):
@@ -128,12 +130,16 @@ class PreviewPageBinder(QObject):
         self._show_current_filters(self._store.current_item())
         result = self._preview_controller.refresh_preview()
         if not result.ok:
-            self.preview_failed.emit(result.error or "Could not refresh preview.")
+            self.preview_failed.emit(
+                result.error or self.tr("Could not refresh preview.")
+            )
 
     def show_saved_preview(self) -> None:
         result = self._preview_controller.show_saved_preview()
         if not result.ok:
-            self.preview_failed.emit(result.error or "Could not show saved preview.")
+            self.preview_failed.emit(
+                result.error or self.tr("Could not show saved preview.")
+            )
             return
         self._show_current_filters(self._store.current_item())
 
@@ -149,7 +155,9 @@ class PreviewPageBinder(QObject):
     def _set_filters(self, filters: object) -> None:
         result = self._preview_controller.set_current_filters(set(filters))
         if not result.ok:
-            self.preview_failed.emit(result.error or "Could not apply filters.")
+            self.preview_failed.emit(
+                result.error or self.tr("Could not apply filters.")
+            )
 
     def _show_current_filters(self, item: ImageItem | None) -> None:
         if item is None:
@@ -160,19 +168,23 @@ class PreviewPageBinder(QObject):
     def _rotate_current(self, turns_delta: int) -> None:
         result = self._preview_controller.rotate_current(turns_delta)
         if not result.ok:
-            self.preview_failed.emit(result.error or "Could not rotate preview.")
+            self.preview_failed.emit(
+                result.error or self.tr("Could not rotate preview.")
+            )
 
     def _save_current(self) -> None:
         result = self._preview_controller.save_current()
         if result.ok:
             self.saved.emit()
             return
-        self.save_failed.emit(result.error or "Could not save current page.")
+        self.save_failed.emit(result.error or self.tr("Could not save current page."))
 
     def _save_and_next(self) -> None:
         result = self._preview_controller.save_current_and_select_next()
         if not result.ok:
-            self.save_failed.emit(result.error or "Could not save current page.")
+            self.save_failed.emit(
+                result.error or self.tr("Could not save current page.")
+            )
             return
         if result.next_index is not None:
             self.next_requested.emit(result.next_index)
@@ -184,7 +196,7 @@ class PreviewPageBinder(QObject):
         if result.ok:
             self.export_requested.emit()
             return
-        self.save_failed.emit(result.error or "Could not save current page.")
+        self.save_failed.emit(result.error or self.tr("Could not save current page."))
 
 
 class ExportPageBinder(QObject):
@@ -259,23 +271,29 @@ class ExportPageBinder(QObject):
     def export_images_to(self, directory: Path) -> None:
         result = self._export_controller.export_images(directory)
         if result.ok:
-            self.export_complete.emit(f"Exported {result.count} image file(s).")
+            self.export_complete.emit(
+                self.tr("Exported {count} image file(s).").format(count=result.count)
+            )
             return
-        self.export_failed.emit(result.error or "Export failed.")
+        self.export_failed.emit(result.error or self.tr("Export failed."))
 
     def export_pdfs_to(self, directory: Path) -> None:
         result = self._export_controller.export_pdfs(directory)
         if result.ok:
-            self.export_complete.emit(f"Exported {result.count} PDF file(s).")
+            self.export_complete.emit(
+                self.tr("Exported {count} PDF file(s).").format(count=result.count)
+            )
             return
-        self.export_failed.emit(result.error or "Export failed.")
+        self.export_failed.emit(result.error or self.tr("Export failed."))
 
     def export_combined_pdf_to(self, path: Path) -> None:
         result = self._export_controller.export_combined_pdf(path)
         if result.ok:
-            self.export_complete.emit(f"Exported {result.count} page PDF.")
+            self.export_complete.emit(
+                self.tr("Exported {count} page PDF.").format(count=result.count)
+            )
             return
-        self.export_failed.emit(result.error or "Export failed.")
+        self.export_failed.emit(result.error or self.tr("Export failed."))
 
     def _set_pdf_page_size_option(self, option: object) -> None:
         if isinstance(option, PdfPageSizeOption):
@@ -284,9 +302,13 @@ class ExportPageBinder(QObject):
     def _update_pdf_page_size_label(self) -> None:
         if not self._export_controller.ordered_saved_items():
             if self._export_state.pdf_page_size_option() == PdfPageSizeOption.AUTO:
-                self._page.set_pdf_page_size_label("Auto selected: no saved pages")
+                self._page.set_pdf_page_size_label(
+                    self.tr("Auto selected: no saved pages")
+                )
             else:
-                self._page.set_pdf_page_size_label("PDF page size: no saved pages")
+                self._page.set_pdf_page_size_label(
+                    self.tr("PDF page size: no saved pages")
+                )
             return
         try:
             layout = self._export_controller.resolve_current_pdf_layout()
@@ -294,6 +316,14 @@ class ExportPageBinder(QObject):
             self._page.set_pdf_page_size_label(str(exc))
             return
         if self._export_state.pdf_page_size_option() == PdfPageSizeOption.AUTO:
-            self._page.set_pdf_page_size_label(f"Auto selected: {layout.name}")
+            self._page.set_pdf_page_size_label(
+                self.tr("Auto selected: {page_size}").format(
+                    page_size=pdf_page_layout_label(layout)
+                )
+            )
         else:
-            self._page.set_pdf_page_size_label(f"PDF page size: {layout.name}")
+            self._page.set_pdf_page_size_label(
+                self.tr("PDF page size: {page_size}").format(
+                    page_size=pdf_page_layout_label(layout)
+                )
+            )

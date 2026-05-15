@@ -22,6 +22,24 @@ Open the GUI with example images already queued:
 uv run oss-cam-scanner path/to/image1.jpg path/to/image2.png
 ```
 
+## Localization
+
+The app uses Qt translation files for UI text. English source strings are the default fallback. Simplified Chinese translations live in:
+
+```bash
+src/oss_cam_scanner/translations/oss_cam_scanner_zh_CN.ts
+```
+
+Machine translation can be used to prefill missing entries in the TS file. Treat that output as a draft, review it in Qt Linguist, and keep human edits in the TS file.
+
+Review or edit the TS file with Qt Linguist, then compile it for runtime use:
+
+```bash
+pyside6-lrelease src/oss_cam_scanner/translations/oss_cam_scanner_zh_CN.ts -qm src/oss_cam_scanner/translations/oss_cam_scanner_zh_CN.qm
+```
+
+Large translated documents are stored as one Markdown file per locale under `src/oss_cam_scanner/resources/docs/`.
+
 ## Workflow
 
 1. Open one or more images.

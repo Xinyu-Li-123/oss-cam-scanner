@@ -5,7 +5,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget
 
 from oss_cam_scanner.core.io import image_to_pixmap
-from oss_cam_scanner.models import ImageItem
+from oss_cam_scanner.models import ImageItem, item_status_label
 
 
 class ImageListView(QListWidget):
@@ -30,7 +30,7 @@ class ImageListView(QListWidget):
         if index < 0 or index >= self.count():
             return
         list_item = self.item(index)
-        list_item.setText(f"{item.display_name} [{item.status}]")
+        list_item.setText(f"{item.display_name} [{item_status_label(item.status)}]")
         list_item.setToolTip(str(item.path))
         self._set_item_icon(list_item, item)
 
@@ -42,7 +42,9 @@ class ImageListView(QListWidget):
         self.blockSignals(False)
 
     def _format_list_item(self, item: ImageItem) -> QListWidgetItem:
-        list_item = QListWidgetItem(f"{item.display_name} [{item.status}]")
+        list_item = QListWidgetItem(
+            f"{item.display_name} [{item_status_label(item.status)}]"
+        )
         list_item.setToolTip(str(item.path))
         self._set_item_icon(list_item, item)
         return list_item

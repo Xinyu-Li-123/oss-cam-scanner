@@ -40,24 +40,24 @@ class PreviewPage(QWidget):
         self._preview_label.setStyleSheet("background: #1f2328;")
         layout.addWidget(self._preview_label, 1)
 
-        filter_group = QGroupBox("Filters")
+        filter_group = QGroupBox(self.tr("Filters"))
         filter_group.setStyleSheet("QGroupBox { font-weight: 600; }")
         filter_panel = QHBoxLayout(filter_group)
         for scan_filter, label in (
-            (ScanFilter.NO_SHADOW, "No shadow"),
-            (ScanFilter.LIGHTEN, "Lighten"),
-            (ScanFilter.ENHANCE, "Enhance"),
+            (ScanFilter.NO_SHADOW, self.tr("No shadow")),
+            (ScanFilter.LIGHTEN, self.tr("Lighten")),
+            (ScanFilter.ENHANCE, self.tr("Enhance")),
         ):
             checkbox = QCheckBox(label)
             checkbox.setStyleSheet("QCheckBox { font-size: 15px; padding: 6px 10px; }")
             checkbox.stateChanged.connect(self._emit_filters_changed)
             self._filter_checkboxes[scan_filter] = checkbox
             filter_panel.addWidget(checkbox)
-        rotate_left_button = QPushButton("Rotate Left")
+        rotate_left_button = QPushButton(self.tr("Rotate Left"))
         rotate_left_button.clicked.connect(
             lambda _checked=False: self.rotate_requested.emit(-1)
         )
-        rotate_right_button = QPushButton("Rotate Right")
+        rotate_right_button = QPushButton(self.tr("Rotate Right"))
         rotate_right_button.clicked.connect(
             lambda _checked=False: self.rotate_requested.emit(1)
         )
@@ -66,19 +66,19 @@ class PreviewPage(QWidget):
         filter_panel.addStretch()
 
         actions = QHBoxLayout()
-        adjust_region_button = QPushButton("Adjust Region")
+        adjust_region_button = QPushButton(self.tr("Adjust Region"))
         adjust_region_button.clicked.connect(
             lambda _checked=False: self.adjust_region_requested.emit()
         )
-        self._save_button = QPushButton("Save")
+        self._save_button = QPushButton(self.tr("Save"))
         self._save_button.clicked.connect(
             lambda _checked=False: self.save_requested.emit()
         )
-        self._save_next_button = QPushButton("Save And Next")
+        self._save_next_button = QPushButton(self.tr("Save And Next"))
         self._save_next_button.clicked.connect(
             lambda _checked=False: self.save_next_requested.emit()
         )
-        self._export_button = QPushButton("Save And Export")
+        self._export_button = QPushButton(self.tr("Save And Export"))
         self._export_button.clicked.connect(
             lambda _checked=False: self.save_export_requested.emit()
         )

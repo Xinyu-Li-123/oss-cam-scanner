@@ -11,9 +11,9 @@ class EmptyPage(QWidget):
         super().__init__(parent)
 
         layout = QVBoxLayout(self)
-        label = QLabel("Open one or more images to start scanning.")
+        label = QLabel(self.tr("Open one or more images to start scanning."))
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        open_button = QPushButton("Open Images")
+        open_button = QPushButton(self.tr("Open Images"))
         open_button.clicked.connect(
             lambda _checked=False: self.open_images_requested.emit()
         )

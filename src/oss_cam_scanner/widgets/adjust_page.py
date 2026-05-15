@@ -21,9 +21,9 @@ class AdjustPage(QWidget):
         layout.addWidget(self._canvas, 1)
 
         controls = QHBoxLayout()
-        reset_button = QPushButton("Reset Corners")
+        reset_button = QPushButton(self.tr("Reset Corners"))
         reset_button.clicked.connect(lambda _checked=False: self.reset_requested.emit())
-        preview_button = QPushButton("Preview")
+        preview_button = QPushButton(self.tr("Preview"))
         preview_button.clicked.connect(
             lambda _checked=False: self.preview_requested.emit()
         )

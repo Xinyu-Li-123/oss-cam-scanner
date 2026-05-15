@@ -5,7 +5,11 @@ from pathlib import Path
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QMainWindow,
     QMenu,
@@ -28,6 +32,13 @@ from oss_cam_scanner.controllers import (
     ImportController,
     PreviewController,
 )
+from oss_cam_scanner.i18n import (
+    APP_NAME,
+    APP_ORGANIZATION,
+    LANGUAGE_ENGLISH,
+    LANGUAGE_SIMPLIFIED_CHINESE,
+    LANGUAGE_SYSTEM,
+)
 from oss_cam_scanner.stores import (
     DocumentStore,
     ExportState,
@@ -44,7 +55,7 @@ from oss_cam_scanner.widgets.preview_page import PreviewPage
 class ScannerWindow(QMainWindow):
     def __init__(self, startup_paths: list[Path] | None = None) -> None:
         super().__init__()
-        self.setWindowTitle("OSS Cam Scanner")
+        self.setWindowTitle(self.tr("OSS Cam Scanner"))
 
         self._store = DocumentStore(self)
         self._preview_state = PreviewState(self)
@@ -52,8 +63,8 @@ class ScannerWindow(QMainWindow):
         self._settings = QSettings(
             QSettings.Format.IniFormat,
             QSettings.Scope.UserScope,
-            "oss-cam-scanner",
-            "oss-cam-scanner",
+            APP_ORGANIZATION,
+            APP_NAME,
         )
         self._preference_state = PreferenceState(self._settings, self)
 
@@ -112,7 +123,7 @@ class ScannerWindow(QMainWindow):
         for failure in result.failures:
             QMessageBox.warning(
                 self,
-                "Open Image Failed",
+                self.tr("Open Image Failed"),
                 f"{failure.path}\n\n{failure.error}",
             )
         if result.imported_indices and self._store.current_index() < 0:
@@ -131,27 +142,30 @@ class ScannerWindow(QMainWindow):
         self.setCentralWidget(root)
 
     def _build_toolbar(self) -> None:
-        toolbar = QToolBar("Main")
+        toolbar = QToolBar(self.tr("Main"))
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
-        file_menu = QMenu("File", self)
-        open_action = QAction("Open Images", self)
+        file_menu = QMenu(self.tr("File"), self)
+        open_action = QAction(self.tr("Open Images"), self)
         open_action.triggered.connect(self._choose_images)
         file_menu.addAction(open_action)
 
-        export_action = QAction("Export", self)
+        export_action = QAction(self.tr("Export"), self)
         export_action.triggered.connect(self._show_export_page)
         file_menu.addAction(export_action)
 
         file_button = QToolButton(self)
-        file_button.setText("File")
+        file_button.setText(self.tr("File"))
         file_button.setMenu(file_menu)
         file_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar.addWidget(file_button)
 
-        preference_menu = QMenu("Preference", self)
-        apply_filters_action = QAction("Apply First Saved Filters To All Pages", self)
+        preference_menu = QMenu(self.tr("Preference"), self)
+        apply_filters_action = QAction(
+            self.tr("Apply First Saved Filters To All Pages"),
+            self,
+        )
         apply_filters_action.setCheckable(True)
         apply_filters_action.setChecked(
             self._preference_state.apply_first_saved_filters_to_all_pages()
@@ -161,8 +175,12 @@ class ScannerWindow(QMainWindow):
         )
         preference_menu.addAction(apply_filters_action)
 
+        language_action = QAction(self.tr("Language..."), self)
+        language_action.triggered.connect(self._choose_language)
+        preference_menu.addAction(language_action)
+
         preference_button = QToolButton(self)
-        preference_button.setText("Preference")
+        preference_button.setText(self.tr("Preference"))
         preference_button.setMenu(preference_menu)
         preference_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar.addWidget(preference_button)
@@ -196,11 +214,47 @@ class ScannerWindow(QMainWindow):
     def _choose_images(self) -> None:
         filenames, _ = QFileDialog.getOpenFileNames(
             self,
-            "Open Images",
+            self.tr("Open Images"),
             "",
-            "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)",
+            self.tr("Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"),
         )
         self.add_images([Path(filename) for filename in filenames])
+
+    def _choose_language(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.tr("Language"))
+        layout = QFormLayout(dialog)
+
+        language_combo = QComboBox(dialog)
+        language_combo.addItem(self.tr("Use System Language"), LANGUAGE_SYSTEM)
+        language_combo.addItem(self.tr("English"), LANGUAGE_ENGLISH)
+        language_combo.addItem(
+            self.tr("Simplified Chinese"),
+            LANGUAGE_SIMPLIFIED_CHINESE,
+        )
+        current_index = language_combo.findData(
+            self._preference_state.language_preference()
+        )
+        if current_index >= 0:
+            language_combo.setCurrentIndex(current_index)
+        layout.addRow(self.tr("Language"), language_combo)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel,
+            dialog,
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        selected_language = language_combo.currentData()
+        old_language = self._preference_state.language_preference()
+        self._preference_state.set_language_preference(str(selected_language))
+        if self._preference_state.language_preference() != old_language:
+            self._show_language_restart_required()
 
     def _show_selected_index(self, index: int) -> None:
         if index < 0:
@@ -246,19 +300,19 @@ class ScannerWindow(QMainWindow):
         if not self._export_binder.has_saved_items():
             QMessageBox.information(
                 self,
-                "Nothing To Export",
-                "Save at least one page before exporting.",
+                self.tr("Nothing To Export"),
+                self.tr("Save at least one page before exporting."),
             )
             return
         self._stack.setCurrentWidget(self._export_page)
 
     def _choose_export_image_directory(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Export Images")
+        directory = QFileDialog.getExistingDirectory(self, self.tr("Export Images"))
         if directory:
             self._export_binder.export_images_to(Path(directory))
 
     def _choose_export_pdf_directory(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Export PDFs")
+        directory = QFileDialog.getExistingDirectory(self, self.tr("Export PDFs"))
         if directory:
             self._export_binder.export_pdfs_to(Path(directory))
 
@@ -268,28 +322,39 @@ class ScannerWindow(QMainWindow):
         first_path = directory / f"{stem}-combined-scan.pdf"
         filename, _ = QFileDialog.getSaveFileName(
             self,
-            "Export Combined PDF",
+            self.tr("Export Combined PDF"),
             str(first_path),
-            "PDF File (*.pdf)",
+            self.tr("PDF File (*.pdf)"),
         )
         if filename:
             self._export_binder.export_combined_pdf_to(Path(filename))
 
+    def _show_language_restart_required(self) -> None:
+        QMessageBox.warning(
+            self,
+            self.tr("Restart Required"),
+            self.tr(
+                "The language change will be applied the next time you start the app."
+            ),
+        )
+
     def _show_preview_failed(self, message: str) -> None:
         QMessageBox.warning(
             self,
-            "Preview Failed",
-            f"Could not warp document region.\n\n{message}",
+            self.tr("Preview Failed"),
+            self.tr("Could not warp document region.\n\n{message}").format(
+                message=message,
+            ),
         )
 
     def _show_save_failed(self, message: str) -> None:
-        QMessageBox.warning(self, "Save Failed", message)
+        QMessageBox.warning(self, self.tr("Save Failed"), message)
 
     def _show_preview_operation_failed(self, message: str) -> None:
-        QMessageBox.warning(self, "Preview Failed", message)
+        QMessageBox.warning(self, self.tr("Preview Failed"), message)
 
     def _show_export_complete(self, message: str) -> None:
-        QMessageBox.information(self, "Export Complete", message)
+        QMessageBox.information(self, self.tr("Export Complete"), message)
 
     def _show_export_failed(self, message: str) -> None:
-        QMessageBox.warning(self, "Export Failed", message)
+        QMessageBox.warning(self, self.tr("Export Failed"), message)

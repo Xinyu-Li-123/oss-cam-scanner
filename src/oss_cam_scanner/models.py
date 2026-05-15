@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
+from PySide6.QtCore import QCoreApplication
 
 if TYPE_CHECKING:
     from oss_cam_scanner.core.filters import ScanFilter
@@ -20,6 +21,10 @@ class ItemStatus(StrEnum):
     PREVIEWED = "previewed"
     SAVED = "saved for export"
     FAILED = "failed"
+
+
+def item_status_label(status: ItemStatus) -> str:
+    return QCoreApplication.translate("ItemStatus", status.value)
 
 
 @dataclass(slots=True)

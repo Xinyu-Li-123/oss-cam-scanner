@@ -18,6 +18,13 @@ oss-cam-scanner = "oss_cam_scanner.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/oss_cam_scanner"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/oss_cam_scanner/resources" = "oss_cam_scanner/resources"
+"src/oss_cam_scanner/translations" = "oss_cam_scanner/translations"
+
 [dependency-groups]
 dev = [
     "pyside6-stubs>=6.7.3.0",

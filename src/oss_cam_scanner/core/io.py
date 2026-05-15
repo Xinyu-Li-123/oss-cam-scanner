@@ -7,6 +7,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QImage, QPixmap
 
 from oss_cam_scanner.models import ImageArray
@@ -21,17 +22,44 @@ class PdfPageSizeOption(StrEnum):
     FIT_TO_IMAGE = "Fit to image"
 
 
+def pdf_page_size_option_label(option: PdfPageSizeOption) -> str:
+    return QCoreApplication.translate("PdfPageSizeOption", option.value)
+
+
 @dataclass(frozen=True, slots=True)
 class PdfPageLayout:
     name: str
     page_size_px: tuple[int, int] | None
 
 
+def pdf_page_layout_label(layout: PdfPageLayout) -> str:
+    if layout.name == PdfPageSizeOption.FIT_TO_IMAGE.value:
+        return pdf_page_size_option_label(PdfPageSizeOption.FIT_TO_IMAGE)
+    if layout.name.endswith(" portrait"):
+        page_size = layout.name.removesuffix(" portrait")
+        return QCoreApplication.translate(
+            "PdfPageLayout",
+            "{page_size} portrait",
+        ).format(page_size=page_size)
+    if layout.name.endswith(" landscape"):
+        page_size = layout.name.removesuffix(" landscape")
+        return QCoreApplication.translate(
+            "PdfPageLayout",
+            "{page_size} landscape",
+        ).format(page_size=page_size)
+    return layout.name
+
+
 def read_image_rgb(path: Path) -> ImageArray:
     data = np.fromfile(path, dtype=np.uint8)
     bgr = cv2.imdecode(data, cv2.IMREAD_COLOR)
     if bgr is None:
-        raise ValueError(f"Could not read image: {path}")
+        raise ValueError(
+            QCoreApplication.translate(
+                "ImageIO",
+                "Could not read image: {path}",
+            ).format(path=path)
+        )
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
 
@@ -71,7 +99,12 @@ def write_combined_pdf(
     layout: PdfPageLayout,
 ) -> None:
     if not images_rgb:
-        raise ValueError("Cannot export a PDF without saved pages.")
+        raise ValueError(
+            QCoreApplication.translate(
+                "ImageIO",
+                "Cannot export a PDF without saved pages.",
+            )
+        )
     if path.suffix.lower() != ".pdf":
         path = path.with_suffix(".pdf")
     pages = [_pdf_page_from_rgb(image, layout) for image in images_rgb]
@@ -83,7 +116,13 @@ def image_to_qimage(image_rgb: ImageArray) -> QImage:
     contiguous = np.ascontiguousarray(image_rgb)
     height, width, channels = contiguous.shape
     bytes_per_line = channels * width
-    return QImage(contiguous.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
+    return QImage(
+        contiguous.data,
+        width,
+        height,
+        bytes_per_line,
+        QImage.Format.Format_RGB888,
+    ).copy()
 
 
 def image_to_pixmap(image_rgb: ImageArray) -> QPixmap:
