@@ -1,6 +1,6 @@
 # OSS Cam Scanner
 
-语言：English | [简体中文](README.zh_CN.md)
+语言：简体中文 | [English](README.en.md)
 
 `OSS Cam Scanner` 是一个仿照全能扫描王的文件扫描工具。用户可以上传多张照片，手动调整文档区域，添加各种滤镜，并将结果导出为扫描效果的图片或 PDF。
 

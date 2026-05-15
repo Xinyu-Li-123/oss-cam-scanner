@@ -1,6 +1,6 @@
 # OSS Cam Scanner
 
-Languages: English | [简体中文](README.zh_CN.md)
+Languages：[简体中文](README.md) | English
 
 A desktop document scanner for photos. It finds the document region, lets you adjust the four corners, applies scan-style filters, and exports the result as images or PDFs.
 
