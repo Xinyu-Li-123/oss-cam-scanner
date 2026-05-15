@@ -174,7 +174,7 @@ class ScannerWindow(QMainWindow):
         self._adjust_binder.preview_ready.connect(self._show_preview_page)
         self._adjust_binder.preview_failed.connect(self._show_preview_failed)
 
-        self._preview_binder.back_requested.connect(self._show_adjustment)
+        self._preview_binder.adjust_region_requested.connect(self._show_adjustment)
         self._preview_binder.preview_failed.connect(self._show_preview_operation_failed)
         self._preview_binder.save_failed.connect(self._show_save_failed)
         self._preview_binder.next_requested.connect(self._select_next_index)

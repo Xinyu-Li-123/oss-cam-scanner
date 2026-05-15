@@ -18,7 +18,7 @@ from oss_cam_scanner.models import ImageArray
 
 
 class PreviewPage(QWidget):
-    back_requested = Signal()
+    adjust_region_requested = Signal()
     filters_changed = Signal(object)
     rotate_requested = Signal(int)
     save_requested = Signal()
@@ -66,8 +66,10 @@ class PreviewPage(QWidget):
         filter_panel.addStretch()
 
         actions = QHBoxLayout()
-        back_button = QPushButton("Back")
-        back_button.clicked.connect(lambda _checked=False: self.back_requested.emit())
+        adjust_region_button = QPushButton("Adjust Region")
+        adjust_region_button.clicked.connect(
+            lambda _checked=False: self.adjust_region_requested.emit()
+        )
         self._save_button = QPushButton("Save")
         self._save_button.clicked.connect(
             lambda _checked=False: self.save_requested.emit()
@@ -82,7 +84,7 @@ class PreviewPage(QWidget):
         )
 
         actions.addStretch()
-        actions.addWidget(back_button)
+        actions.addWidget(adjust_region_button)
         actions.addWidget(self._save_button)
         actions.addWidget(self._save_next_button)
         actions.addWidget(self._export_button)

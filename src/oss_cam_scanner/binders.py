@@ -92,7 +92,7 @@ class AdjustPageBinder(QObject):
 
 
 class PreviewPageBinder(QObject):
-    back_requested = Signal()
+    adjust_region_requested = Signal()
     preview_failed = Signal(str)
     save_failed = Signal(str)
     saved = Signal()
@@ -112,7 +112,7 @@ class PreviewPageBinder(QObject):
         self._store = store
         self._preview_controller = preview_controller
 
-        self._page.back_requested.connect(self.back_requested.emit)
+        self._page.adjust_region_requested.connect(self.adjust_region_requested.emit)
         self._page.filters_changed.connect(self._set_filters)
         self._page.rotate_requested.connect(self._rotate_current)
         self._page.save_requested.connect(self._save_current)
